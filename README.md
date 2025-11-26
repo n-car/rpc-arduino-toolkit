@@ -393,6 +393,8 @@ public:
 - [rpc-express-toolkit](https://github.com/n-car/rpc-express-toolkit) - Node.js/Express implementation
 - [rpc-php-toolkit](https://github.com/n-car/rpc-php-toolkit) - PHP implementation
 - [rpc-dotnet-toolkit](https://github.com/n-car/rpc-dotnet-toolkit) - .NET implementation
+- [rpc-java-toolkit](https://github.com/n-car/rpc-java-toolkit) - Java & Android implementation
+- [node-red-contrib-rpc-toolkit](https://github.com/n-car/node-red-contrib-rpc-toolkit) - Node-RED visual programming
 - [rpc-arduino-toolkit](https://github.com/n-car/rpc-arduino-toolkit) - Arduino/ESP32 implementation (you are here)
 
 ## 🛠️ Development
