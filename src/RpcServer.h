@@ -46,6 +46,31 @@ private:
     RpcResponse executeMethod(RpcRequest& req) {
         RpcResponse resp;
         
+        // Built-in introspection methods (memory-efficient)
+        if (req.method == "__rpc.listMethods") {
+            StaticJsonDocument<256> doc;
+            JsonArray arr = doc.to<JsonArray>();
+            
+            for (uint8_t i = 0; i < MAX_METHODS; i++) {
+                if (methods[i].active) {
+                    arr.add(methods[i].name);
+                }
+            }
+            
+            resp.setResult(doc.as<JsonVariant>(), req.id);
+            return resp;
+        }
+        
+        if (req.method == "__rpc.version") {
+            StaticJsonDocument<128> doc;
+            doc["toolkit"] = "rpc-arduino-toolkit";
+            doc["version"] = "1.0.0";
+            doc["methodCount"] = methodCount;
+            
+            resp.setResult(doc.as<JsonVariant>(), req.id);
+            return resp;
+        }
+        
         // Find method
         Method* method = nullptr;
         for (uint8_t i = 0; i < MAX_METHODS; i++) {

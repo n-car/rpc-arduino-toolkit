@@ -11,6 +11,7 @@ Lightweight JSON-RPC 2.0 client and server library for Arduino, ESP32, ESP8266, 
 ### Core Features
 - **JSON-RPC 2.0 Compliance** - Full spec support with minimal memory footprint
 - **Client & Server** - Both RPC client and server implementations
+- **Built-in Introspection** - API discovery with `__rpc.listMethods` and `__rpc.version`
 - **Multiple Transports** - Serial, WiFi, Bluetooth LE, LoRa
 - **Memory Efficient** - Static allocation, minimal RAM usage
 - **Cross-Platform** - Works with Node.js, PHP, and .NET servers
@@ -205,6 +206,44 @@ if (resp.hasError()) {
     Serial.println(resp.errorMessage());
 }
 ```
+
+### Built-in Introspection Methods
+
+The RPC server includes built-in introspection methods for API discovery (memory-optimized for embedded platforms):
+
+```cpp
+// __rpc.listMethods - List all registered methods
+RpcResponse resp = rpc.call("__rpc.listMethods");
+// Result: ["ping", "setLED", "readTemp", ...]
+
+// __rpc.version - Get server version and method count
+resp = rpc.call("__rpc.version");
+// Result: {"toolkit":"rpc-arduino-toolkit","version":"1.0.0","methodCount":3}
+```
+
+**Features:**
+- Automatically available on all RPC servers
+- No registration needed - built into `executeMethod()`
+- Minimal memory footprint (~256 bytes)
+- Compatible with cross-platform toolkits
+
+**Example usage with Node.js client:**
+
+```javascript
+const { RpcClient } = require('rpc-express-toolkit');
+const client = new RpcClient('http://esp32.local:8080');
+
+// Discover available methods
+const methods = await client.call('__rpc.listMethods');
+console.log('Available methods:', methods);
+
+// Get server info
+const version = await client.call('__rpc.version');
+console.log(`Server: ${version.toolkit} v${version.version}`);
+console.log(`Methods: ${version.methodCount}`);
+```
+
+See `examples/Introspection/` for complete Arduino example.
 
 ### Custom Transport
 
