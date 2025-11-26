@@ -390,9 +390,10 @@ public:
 
 ## 🔗 Related Projects
 
-- [rpc-express-toolkit](https://github.com/n-car/rpc-express-toolkit) - Node.js/Express
-- [rpc-php-toolkit](https://github.com/n-car/rpc-php-toolkit) - PHP
-- [rpc-dotnet-toolkit](https://github.com/n-car/rpc-dotnet-toolkit) - .NET
+- [rpc-express-toolkit](https://github.com/n-car/rpc-express-toolkit) - Node.js/Express implementation
+- [rpc-php-toolkit](https://github.com/n-car/rpc-php-toolkit) - PHP implementation
+- [rpc-dotnet-toolkit](https://github.com/n-car/rpc-dotnet-toolkit) - .NET implementation
+- [rpc-arduino-toolkit](https://github.com/n-car/rpc-arduino-toolkit) - Arduino/ESP32 implementation (you are here)
 
 ## 🛠️ Development
 
