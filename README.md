@@ -212,20 +212,45 @@ if (resp.hasError()) {
 The RPC server includes built-in introspection methods for API discovery (memory-optimized for embedded platforms):
 
 ```cpp
-// __rpc.listMethods - List all registered methods
+// __rpc.listMethods - List all registered methods (excludes __rpc.*)
 RpcResponse resp = rpc.call("__rpc.listMethods");
 // Result: ["ping", "setLED", "readTemp", ...]
 
 // __rpc.version - Get server version and method count
 resp = rpc.call("__rpc.version");
 // Result: {"toolkit":"rpc-arduino-toolkit","version":"1.0.0","methodCount":3}
+
+// __rpc.describe - Get method description and schema info (requires RPC_ENABLE_SCHEMA_SUPPORT)
+resp = rpc.call("__rpc.describe", "{\"method\":\"add\"}");
+// Result: {"name":"add","description":"Add two numbers","exposeSchema":true}
+
+// __rpc.capabilities - Get server capabilities
+resp = rpc.call("__rpc.capabilities");
+// Result: {"batch":true,"introspection":true,"safeMode":false,"schemaSupport":true,"methodCount":5,"maxMethods":8}
 ```
 
 **Features:**
 - Automatically available on all RPC servers
 - No registration needed - built into `executeMethod()`
-- Minimal memory footprint (~256 bytes)
+- Minimal memory footprint (~800 bytes)
 - Compatible with cross-platform toolkits
+- Schema support optional (can be disabled to save ~200 bytes per method)
+
+**Register methods with schema information:**
+
+```cpp
+// Simple method without schema
+rpc.addMethod("ping", []() -> JsonVariant {
+    return "pong";
+});
+
+// Method with description and schema exposure
+rpc.addMethod("add", [](JsonObject params) -> JsonVariant {
+    int a = params["a"] | 0;
+    int b = params["b"] | 0;
+    return a + b;
+}, "Add two numbers", true);  // description, exposeSchema
+```
 
 **Example usage with Node.js client:**
 
@@ -241,6 +266,15 @@ console.log('Available methods:', methods);
 const version = await client.call('__rpc.version');
 console.log(`Server: ${version.toolkit} v${version.version}`);
 console.log(`Methods: ${version.methodCount}`);
+
+// Get method details
+const methodInfo = await client.call('__rpc.describe', { method: 'add' });
+console.log(`Method: ${methodInfo.name}`);
+console.log(`Description: ${methodInfo.description}`);
+
+// Get server capabilities
+const caps = await client.call('__rpc.capabilities');
+console.log('Capabilities:', caps);
 ```
 
 See `examples/Introspection/` for complete Arduino example.
@@ -291,9 +325,47 @@ rpc.addMethod(FPSTR(METHOD_NAME), []() {
 // In RpcConfig.h or build flags
 #define RPC_ENABLE_SAFE_MODE 0      // Disable safe mode (save ~1KB)
 #define RPC_ENABLE_BATCH 0          // Disable batch (save ~500B)
+#define RPC_ENABLE_SCHEMA_SUPPORT 0 // Disable schema support (save ~200B/method)
 #define RPC_MAX_METHOD_NAME 16      // Limit method name length
 #define RPC_MAX_PARAMS_SIZE 256     // Limit params size
 ```
+
+### Safe Mode Serialization
+
+Safe mode adds prefixes to disambiguate types when serializing to JSON (disabled by default to save memory):
+
+```cpp
+// Enable in RpcConfig.h
+#define RPC_ENABLE_SAFE_MODE 1
+
+// Use RpcSafe helper class
+#include <RpcTypes.h>
+
+// Serialize with prefixes
+String safeStr = RpcSafe::serializeString("hello");      // "S:hello"
+String safeDate = RpcSafe::serializeDate(1234567890);    // "D:1234567890"
+String safeBigInt = RpcSafe::serializeBigInt(9999999);   // "9999999n"
+
+// Deserialize
+String str = RpcSafe::deserializeString("S:hello");      // "hello"
+unsigned long ts = RpcSafe::deserializeDate("D:1234567890");  // 1234567890
+long long num = RpcSafe::deserializeBigInt("9999999n");  // 9999999
+
+// Check type
+bool isStr = RpcSafe::isSafeString("S:test");    // true
+bool isDate = RpcSafe::isSafeDate("D:12345");    // true
+bool isBigInt = RpcSafe::isBigInt("123n");       // true
+```
+
+**Safe Mode Features:**
+- String prefix: `S:` - Distinguishes strings from other types
+- Date prefix: `D:` - Marks timestamps/dates
+- BigInt suffix: `n` - Marks large integers (like JavaScript BigInt)
+- Compatible with Express, PHP, .NET, Java implementations
+- Prevents type confusion in JSON serialization
+- Disabled by default (enable with `RPC_ENABLE_SAFE_MODE=1`)
+
+See `examples/SafeMode/` for complete example.
 
 ## 🔧 Configuration
 
@@ -304,11 +376,15 @@ rpc.addMethod(FPSTR(METHOD_NAME), []() {
 #define RPC_MAX_METHODS 8           // Maximum registered methods
 #define RPC_MAX_REQUEST_SIZE 512    // Max JSON request size
 #define RPC_MAX_RESPONSE_SIZE 512   // Max JSON response size
+#define RPC_MAX_METHOD_NAME 32      // Max method name length
+#define RPC_MAX_DESCRIPTION 64      // Max description length (schema support)
 
 // Features
-#define RPC_ENABLE_SAFE_MODE 1      // Enable safe serialization
+#define RPC_ENABLE_SAFE_MODE 0      // Enable safe serialization (S:, D:, n)
 #define RPC_ENABLE_BATCH 1          // Enable batch requests
 #define RPC_ENABLE_LOGGING 0        // Enable debug logging
+#define RPC_ENABLE_NOTIFICATIONS 1  // Enable fire-and-forget calls
+#define RPC_ENABLE_SCHEMA_SUPPORT 1 // Enable method descriptions
 
 // Timeouts
 #define RPC_DEFAULT_TIMEOUT 5000    // Default timeout (ms)
@@ -317,11 +393,17 @@ rpc.addMethod(FPSTR(METHOD_NAME), []() {
 
 ## 📊 Memory Usage
 
-| Platform | Flash (Code) | RAM (Static) | RAM (Runtime) |
-|----------|--------------|--------------|---------------|
-| Arduino Uno | ~8KB | ~200B | ~512B |
-| ESP32 | ~12KB | ~300B | ~1KB |
-| ESP8266 | ~10KB | ~250B | ~800B |
+| Platform | Flash (Code) | RAM (Static) | RAM (Runtime) | Features |
+|----------|--------------|--------------|---------------|----------|
+| Arduino Uno | ~8KB | ~200B | ~512B | Basic |
+| Arduino Uno + Schema | ~9KB | ~400B | ~512B | +Schema |
+| ESP32 | ~12KB | ~300B | ~1KB | Full |
+| ESP8266 | ~10KB | ~250B | ~800B | Full |
+
+**Feature Impact:**
+- `RPC_ENABLE_SCHEMA_SUPPORT=1`: +200 bytes per method (description storage)
+- `RPC_ENABLE_SAFE_MODE=1`: +1KB Flash, +50 bytes RAM
+- `RPC_ENABLE_BATCH=1`: +500 bytes Flash
 
 *Note: Values depend on enabled features and registered methods*
 
@@ -366,6 +448,8 @@ See the `examples/` folder for complete working examples:
 - **SensorHub** - Multi-sensor data collection
 - **BLEServer** - Bluetooth LE RPC server (ESP32)
 - **LoRaNode** - Long-range IoT node
+- **Introspection** - Demonstrates __rpc.* methods and schema support
+- **SafeMode** - Safe serialization with S:, D:, n prefixes
 
 ## 📖 API Reference
 

@@ -142,6 +142,97 @@ public:
 };
 
 // ============================================================================
+// Safe Serialization Helpers (if RPC_ENABLE_SAFE_MODE)
+// ============================================================================
+
+#if RPC_ENABLE_SAFE_MODE
+
+class RpcSafe {
+public:
+    /**
+     * Serialize a string with S: prefix for safe mode
+     */
+    static String serializeString(const String& value) {
+        return "S:" + value;
+    }
+    
+    /**
+     * Serialize a date/timestamp with D: prefix (ISO 8601 format)
+     * @param timestamp Unix timestamp in seconds
+     */
+    static String serializeDate(unsigned long timestamp) {
+        // Simple ISO 8601 formatting (without timezone conversion)
+        // Arduino typically works with Unix timestamps
+        char buffer[32];
+        snprintf(buffer, sizeof(buffer), "D:%lu", timestamp);
+        return String(buffer);
+    }
+    
+    /**
+     * Serialize a large integer with 'n' suffix (BigInt equivalent)
+     */
+    static String serializeBigInt(long long value) {
+        char buffer[32];
+        snprintf(buffer, sizeof(buffer), "%lldn", value);
+        return String(buffer);
+    }
+    
+    /**
+     * Deserialize a safe string (remove S: prefix)
+     */
+    static String deserializeString(const String& value) {
+        if (value.startsWith("S:")) {
+            return value.substring(2);
+        }
+        return value;
+    }
+    
+    /**
+     * Deserialize a safe date (remove D: prefix and parse)
+     */
+    static unsigned long deserializeDate(const String& value) {
+        if (value.startsWith("D:")) {
+            return value.substring(2).toInt();
+        }
+        return 0;
+    }
+    
+    /**
+     * Deserialize a BigInt (remove 'n' suffix)
+     */
+    static long long deserializeBigInt(const String& value) {
+        if (value.endsWith("n")) {
+            String numStr = value.substring(0, value.length() - 1);
+            return numStr.toInt();  // Note: Arduino long is 32-bit, limited range
+        }
+        return 0;
+    }
+    
+    /**
+     * Check if string is a safe string
+     */
+    static bool isSafeString(const String& value) {
+        return value.startsWith("S:");
+    }
+    
+    /**
+     * Check if string is a safe date
+     */
+    static bool isSafeDate(const String& value) {
+        return value.startsWith("D:");
+    }
+    
+    /**
+     * Check if string is a BigInt
+     */
+    static bool isBigInt(const String& value) {
+        return value.endsWith("n");
+    }
+};
+
+#endif // RPC_ENABLE_SAFE_MODE
+
+// ============================================================================
 // RPC Error Helper
 // ============================================================================
 

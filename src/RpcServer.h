@@ -21,6 +21,10 @@ private:
         char name[RPC_MAX_METHOD_NAME];
         RpcMethodHandler handler;
         bool active;
+#if RPC_ENABLE_SCHEMA_SUPPORT
+        char description[RPC_MAX_DESCRIPTION];
+        bool exposeSchema;
+#endif
     };
     
     Method methods[MAX_METHODS];
@@ -71,6 +75,67 @@ private:
             return resp;
         }
         
+#if RPC_ENABLE_SCHEMA_SUPPORT
+        // __rpc.describe - Get method description and schema availability
+        if (req.method == "__rpc.describe") {
+            const char* methodName = req.params["method"] | "";
+            
+            if (strlen(methodName) == 0) {
+                return RpcError::invalidParams(req.id);
+            }
+            
+            // Prevent introspection of __rpc.* methods
+            if (strncmp(methodName, "__rpc.", 6) == 0) {
+                RpcResponse resp;
+                resp.setError(RPC_ERROR_METHOD_NOT_FOUND, "Cannot describe introspection methods", req.id);
+                return resp;
+            }
+            
+            // Find method
+            Method* method = nullptr;
+            for (uint8_t i = 0; i < MAX_METHODS; i++) {
+                if (methods[i].active && strcmp(methods[i].name, methodName) == 0) {
+                    method = &methods[i];
+                    break;
+                }
+            }
+            
+            if (!method) {
+                return RpcError::methodNotFound(methodName, req.id);
+            }
+            
+            // Check if schema is exposed
+            if (!method->exposeSchema) {
+                RpcResponse resp;
+                resp.setError(RPC_ERROR_METHOD_NOT_FOUND, "Method schema not available", req.id);
+                return resp;
+            }
+            
+            StaticJsonDocument<256> doc;
+            doc["name"] = method->name;
+            doc["description"] = method->description;
+            doc["exposeSchema"] = method->exposeSchema;
+            
+            resp.setResult(doc.as<JsonVariant>(), req.id);
+            return resp;
+        }
+#endif
+        
+        // __rpc.capabilities - Get server capabilities
+        if (req.method == "__rpc.capabilities") {
+            StaticJsonDocument<256> doc;
+            doc["batch"] = RPC_ENABLE_BATCH;
+            doc["introspection"] = true;
+            doc["safeMode"] = RPC_ENABLE_SAFE_MODE;
+            doc["notifications"] = RPC_ENABLE_NOTIFICATIONS;
+            doc["schemaSupport"] = RPC_ENABLE_SCHEMA_SUPPORT;
+            doc["methodCount"] = methodCount;
+            doc["maxMethods"] = MAX_METHODS;
+            
+            resp.setResult(doc.as<JsonVariant>(), req.id);
+            return resp;
+        }
+        
         // Find method
         Method* method = nullptr;
         for (uint8_t i = 0; i < MAX_METHODS; i++) {
@@ -99,6 +164,10 @@ public:
     RpcServer() : methodCount(0) {
         for (uint8_t i = 0; i < MAX_METHODS; i++) {
             methods[i].active = false;
+#if RPC_ENABLE_SCHEMA_SUPPORT
+            methods[i].description[0] = '\0';
+            methods[i].exposeSchema = false;
+#endif
         }
     }
     
@@ -109,6 +178,22 @@ public:
      * @return true if successful
      */
     bool addMethod(const char* name, RpcMethodHandler handler) {
+        return addMethod(name, handler, "", false);
+    }
+    
+#if RPC_ENABLE_SCHEMA_SUPPORT
+    /**
+     * Register a method with description and schema exposure
+     * @param name Method name
+     * @param handler Function to handle the method
+     * @param description Method description (max RPC_MAX_DESCRIPTION chars)
+     * @param exposeSchema Whether to expose schema via introspection
+     * @return true if successful
+     */
+    bool addMethod(const char* name, RpcMethodHandler handler, const char* description, bool exposeSchema = false) {
+#else
+    bool addMethod(const char* name, RpcMethodHandler handler, const char* description = "", bool exposeSchema = false) {
+#endif
         if (methodCount >= MAX_METHODS) {
             RPC_LOG("Max methods reached!");
             return false;
@@ -126,6 +211,14 @@ public:
                 methods[i].name[RPC_MAX_METHOD_NAME - 1] = '\0';
                 methods[i].handler = handler;
                 methods[i].active = true;
+#if RPC_ENABLE_SCHEMA_SUPPORT
+                strncpy(methods[i].description, description, RPC_MAX_DESCRIPTION - 1);
+                methods[i].description[RPC_MAX_DESCRIPTION - 1] = '\0';
+                methods[i].exposeSchema = exposeSchema;
+#else
+                (void)description;  // Suppress unused parameter warning
+                (void)exposeSchema;
+#endif
                 methodCount++;
                 
                 RPC_LOG_F("Method registered: %s", name);

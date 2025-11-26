@@ -66,6 +66,16 @@
   #define RPC_ENABLE_NOTIFICATIONS 1
 #endif
 
+// Enable schema support (adds description and exposeSchema per method)
+#ifndef RPC_ENABLE_SCHEMA_SUPPORT
+  #define RPC_ENABLE_SCHEMA_SUPPORT 1  // Enabled by default (minimal overhead)
+#endif
+
+// Maximum description length (if schema support enabled)
+#ifndef RPC_MAX_DESCRIPTION
+  #define RPC_MAX_DESCRIPTION 64
+#endif
+
 // ============================================================================
 // Timeouts (milliseconds)
 // ============================================================================
