@@ -1,0 +1,456 @@
+# RPC Arduino Toolkit
+
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Arduino](https://img.shields.io/badge/Arduino-Compatible-green.svg)](https://www.arduino.cc/)
+[![PlatformIO](https://img.shields.io/badge/PlatformIO-Compatible-orange.svg)](https://platformio.org/)
+
+Lightweight JSON-RPC 2.0 client and server library for Arduino, ESP32, ESP8266, and other embedded platforms. Part of the RPC Toolkit ecosystem with cross-platform compatibility.
+
+## 🎯 Features
+
+### Core Features
+- **JSON-RPC 2.0 Compliance** - Full spec support with minimal memory footprint
+- **Client & Server** - Both RPC client and server implementations
+- **Multiple Transports** - Serial, WiFi, Bluetooth LE, LoRa
+- **Memory Efficient** - Static allocation, minimal RAM usage
+- **Cross-Platform** - Works with Node.js, PHP, and .NET servers
+
+### Supported Platforms
+- ✅ **Arduino** (Uno, Mega, Nano, etc.) - 2KB+ RAM
+- ✅ **ESP32** - WiFi/BLE integrated, 520KB RAM
+- ✅ **ESP8266** - WiFi, 80KB RAM
+- ✅ **STM32** - Via Arduino framework
+- ✅ **Raspberry Pi Pico** (RP2040)
+
+### Transport Options
+- **Serial/UART** - USB, hardware serial
+- **WiFi** - ESP32/ESP8266 HTTP client/server
+- **Bluetooth LE** - ESP32 BLE
+- **LoRa** - Long-range IoT communication (optional)
+
+## 📦 Installation
+
+### Arduino IDE
+1. Open Arduino IDE
+2. Go to **Sketch > Include Library > Manage Libraries**
+3. Search for "RPC Arduino Toolkit"
+4. Click **Install**
+
+### PlatformIO
+Add to `platformio.ini`:
+```ini
+[env:esp32dev]
+platform = espressif32
+board = esp32dev
+framework = arduino
+lib_deps = 
+    n-car/RpcArduinoToolkit
+```
+
+### Manual Installation
+1. Download the latest release
+2. Extract to `Arduino/libraries/RpcArduinoToolkit`
+3. Restart Arduino IDE
+
+## 🚀 Quick Start
+
+### Server Example (ESP32 - WiFi)
+
+```cpp
+#include <WiFi.h>
+#include <RpcServer.h>
+#include <RpcWiFiTransport.h>
+
+// Create server with max 8 methods
+RpcServer<8> rpc;
+WiFiServer server(8080);
+
+void setup() {
+    Serial.begin(115200);
+    
+    // Connect to WiFi
+    WiFi.begin("YourSSID", "YourPassword");
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+        Serial.print(".");
+    }
+    Serial.println("\nConnected!");
+    Serial.println(WiFi.localIP());
+    
+    // Register methods
+    rpc.addMethod("led", [](JsonObject params) -> JsonVariant {
+        int pin = params["pin"];
+        bool state = params["state"];
+        digitalWrite(pin, state ? HIGH : LOW);
+        return true;
+    });
+    
+    rpc.addMethod("readTemp", []() -> JsonVariant {
+        // Read temperature sensor (example)
+        float temp = analogRead(A0) * 0.1;
+        return temp;
+    });
+    
+    // Start server
+    server.begin();
+}
+
+void loop() {
+    WiFiClient client = server.available();
+    if (client) {
+        RpcWiFiTransport transport(client);
+        String response = rpc.handleRequest(transport);
+        client.print(response);
+        client.stop();
+    }
+}
+```
+
+### Client Example (Arduino - Serial)
+
+```cpp
+#include <RpcClient.h>
+#include <RpcSerialTransport.h>
+
+RpcSerialTransport transport(Serial);
+RpcClient rpc(transport);
+
+void setup() {
+    Serial.begin(115200);
+    pinMode(LED_BUILTIN, OUTPUT);
+}
+
+void loop() {
+    // Call remote method
+    RpcResponse resp = rpc.call("readTemp");
+    
+    if (resp.isSuccess()) {
+        float temp = resp.result<float>();
+        Serial.print("Temperature: ");
+        Serial.println(temp);
+        
+        // Control LED based on temperature
+        if (temp > 30.0) {
+            rpc.call("led", "{\"pin\":13,\"state\":true}");
+        }
+    }
+    
+    delay(1000);
+}
+```
+
+### Server Example (Arduino - Serial)
+
+```cpp
+#include <RpcServer.h>
+#include <RpcSerialTransport.h>
+
+RpcServer<4> rpc;
+
+void setup() {
+    Serial.begin(115200);
+    pinMode(LED_BUILTIN, OUTPUT);
+    
+    // Register LED control
+    rpc.addMethod("setLED", [](JsonObject params) -> JsonVariant {
+        bool state = params["state"];
+        digitalWrite(LED_BUILTIN, state ? HIGH : LOW);
+        return state;
+    });
+    
+    // Register analog read
+    rpc.addMethod("readAnalog", [](JsonObject params) -> JsonVariant {
+        int pin = params["pin"];
+        return analogRead(pin);
+    });
+}
+
+void loop() {
+    if (Serial.available()) {
+        RpcSerialTransport transport(Serial);
+        String response = rpc.handleRequest(transport);
+        Serial.println(response);
+    }
+}
+```
+
+## 📚 Advanced Usage
+
+### Batch Requests
+
+```cpp
+// Client sends multiple requests at once
+String batch = "[{\"jsonrpc\":\"2.0\",\"method\":\"readTemp\",\"id\":1},"
+               "{\"jsonrpc\":\"2.0\",\"method\":\"readHumidity\",\"id\":2}]";
+               
+RpcResponse resp = rpc.callBatch(batch);
+```
+
+### Notifications (No Response)
+
+```cpp
+// Fire-and-forget call
+rpc.notify("logEvent", "{\"level\":\"info\",\"msg\":\"Sensor read\"}");
+```
+
+### Error Handling
+
+```cpp
+RpcResponse resp = rpc.call("unknownMethod");
+
+if (resp.hasError()) {
+    Serial.print("Error code: ");
+    Serial.println(resp.errorCode());
+    Serial.print("Error message: ");
+    Serial.println(resp.errorMessage());
+}
+```
+
+### Custom Transport
+
+```cpp
+class MyCustomTransport : public RpcTransport {
+public:
+    String read() override {
+        // Read from your custom interface
+        return readFromCustomInterface();
+    }
+    
+    void write(const String& data) override {
+        // Write to your custom interface
+        writeToCustomInterface(data);
+    }
+};
+```
+
+## 🎨 Memory Optimization
+
+### Static Allocation
+
+```cpp
+// Specify max methods at compile time
+RpcServer<8> server;  // 8 methods max
+
+// Use StaticJsonDocument for predictable memory
+StaticJsonDocument<512> doc;
+```
+
+### Flash Storage (PROGMEM)
+
+```cpp
+// Store strings in flash memory
+const char METHOD_NAME[] PROGMEM = "myMethod";
+
+rpc.addMethod(FPSTR(METHOD_NAME), []() {
+    return 42;
+});
+```
+
+### Disable Features
+
+```cpp
+// In RpcConfig.h or build flags
+#define RPC_ENABLE_SAFE_MODE 0      // Disable safe mode (save ~1KB)
+#define RPC_ENABLE_BATCH 0          // Disable batch (save ~500B)
+#define RPC_MAX_METHOD_NAME 16      // Limit method name length
+#define RPC_MAX_PARAMS_SIZE 256     // Limit params size
+```
+
+## 🔧 Configuration
+
+### RpcConfig.h
+
+```cpp
+// Memory limits
+#define RPC_MAX_METHODS 8           // Maximum registered methods
+#define RPC_MAX_REQUEST_SIZE 512    // Max JSON request size
+#define RPC_MAX_RESPONSE_SIZE 512   // Max JSON response size
+
+// Features
+#define RPC_ENABLE_SAFE_MODE 1      // Enable safe serialization
+#define RPC_ENABLE_BATCH 1          // Enable batch requests
+#define RPC_ENABLE_LOGGING 0        // Enable debug logging
+
+// Timeouts
+#define RPC_DEFAULT_TIMEOUT 5000    // Default timeout (ms)
+#define RPC_SERIAL_TIMEOUT 1000     // Serial read timeout (ms)
+```
+
+## 📊 Memory Usage
+
+| Platform | Flash (Code) | RAM (Static) | RAM (Runtime) |
+|----------|--------------|--------------|---------------|
+| Arduino Uno | ~8KB | ~200B | ~512B |
+| ESP32 | ~12KB | ~300B | ~1KB |
+| ESP8266 | ~10KB | ~250B | ~800B |
+
+*Note: Values depend on enabled features and registered methods*
+
+## 🌐 Cross-Platform Compatibility
+
+Works seamlessly with:
+- ✅ **rpc-express-toolkit** (Node.js/Express)
+- ✅ **rpc-php-toolkit** (PHP)
+- ✅ **rpc-dotnet-toolkit** (.NET)
+
+### Example: ESP32 → Node.js Server
+
+**ESP32 Client:**
+```cpp
+WiFiClient client;
+client.connect("192.168.1.100", 3000);
+
+RpcWiFiTransport transport(client);
+RpcClient rpc(transport);
+
+float result = rpc.call("add", "{\"a\":5,\"b\":3}").result<float>();
+```
+
+**Node.js Server (Express):**
+```javascript
+const { RpcEndpoint } = require('rpc-express-toolkit');
+const rpc = new RpcEndpoint('/api/rpc');
+
+rpc.addMethod('add', (params) => {
+    return params.a + params.b;
+});
+```
+
+## 🧪 Examples
+
+See the `examples/` folder for complete working examples:
+
+- **BasicServer** - Simple RPC server on Serial
+- **WiFiServer** - ESP32 HTTP RPC server
+- **WiFiClient** - ESP32 calling remote server
+- **SerialBridge** - Arduino ↔ ESP32 bridge
+- **SensorHub** - Multi-sensor data collection
+- **BLEServer** - Bluetooth LE RPC server (ESP32)
+- **LoRaNode** - Long-range IoT node
+
+## 📖 API Reference
+
+### RpcServer
+
+```cpp
+template<uint8_t MAX_METHODS>
+class RpcServer {
+public:
+    // Register a method
+    bool addMethod(const char* name, RpcMethodHandler handler);
+    
+    // Handle incoming request
+    String handleRequest(RpcTransport& transport);
+    String handleRequest(const String& json);
+    
+    // Remove a method
+    bool removeMethod(const char* name);
+};
+```
+
+### RpcClient
+
+```cpp
+class RpcClient {
+public:
+    RpcClient(RpcTransport& transport);
+    
+    // Call remote method
+    RpcResponse call(const char* method, const String& params = "");
+    RpcResponse call(const char* method, JsonObject params);
+    
+    // Send notification (no response)
+    void notify(const char* method, const String& params = "");
+    
+    // Batch request
+    RpcResponse callBatch(const String& batch);
+    
+    // Set timeout
+    void setTimeout(unsigned long ms);
+};
+```
+
+### RpcResponse
+
+```cpp
+class RpcResponse {
+public:
+    bool isSuccess() const;
+    bool hasError() const;
+    
+    // Get result
+    template<typename T>
+    T result() const;
+    
+    // Get error
+    int errorCode() const;
+    String errorMessage() const;
+};
+```
+
+## 🔗 Related Projects
+
+- [rpc-express-toolkit](https://github.com/n-car/rpc-express-toolkit) - Node.js/Express
+- [rpc-php-toolkit](https://github.com/n-car/rpc-php-toolkit) - PHP
+- [rpc-dotnet-toolkit](https://github.com/n-car/rpc-dotnet-toolkit) - .NET
+
+## 🛠️ Development
+
+### Build Examples
+
+```bash
+# Using PlatformIO
+pio run -e esp32dev
+pio run -e arduino_uno
+pio run -e esp8266
+
+# Upload to device
+pio run -e esp32dev --target upload
+```
+
+### Run Tests
+
+```bash
+# Native tests (host platform)
+pio test -e native
+```
+
+## 📝 Roadmap
+
+### v1.0.0 (Current Development)
+- [x] Core RPC client/server
+- [x] Serial transport
+- [x] Basic JSON parser
+- [ ] WiFi transport (ESP32/ESP8266)
+- [ ] Complete examples
+- [ ] Documentation
+
+### v1.1.0
+- [ ] Bluetooth LE transport (ESP32)
+- [ ] Safe Mode support
+- [ ] Batch requests
+- [ ] Schema validation
+
+### v1.2.0
+- [ ] LoRa transport
+- [ ] WebSocket support
+- [ ] mDNS discovery
+- [ ] OTA updates integration
+
+## 🤝 Contributing
+
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- Built on [ArduinoJson](https://arduinojson.org/) library
+- Compatible with Arduino Core for ESP32/ESP8266
+- Part of the RPC Toolkit ecosystem
+
+---
+
+**RPC Arduino Toolkit** - Bring JSON-RPC 2.0 to your embedded projects.

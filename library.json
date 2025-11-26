@@ -1,0 +1,43 @@
+{
+  "name": "RPC Arduino Toolkit",
+  "version": "1.0.0",
+  "description": "Lightweight JSON-RPC 2.0 client and server for Arduino, ESP32, ESP8266 with multiple transport options",
+  "keywords": [
+    "json-rpc",
+    "rpc",
+    "client",
+    "server",
+    "arduino",
+    "esp32",
+    "esp8266",
+    "wifi",
+    "serial",
+    "bluetooth",
+    "iot"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/n-car/rpc-arduino-toolkit.git"
+  },
+  "authors": [
+    {
+      "name": "Nicola Carpanese",
+      "email": "nicola@carpanese.com",
+      "maintainer": true
+    }
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/n-car/rpc-arduino-toolkit",
+  "frameworks": "arduino",
+  "platforms": ["espressif32", "espressif8266", "atmelavr", "ststm32"],
+  "dependencies": {
+    "bblanchon/ArduinoJson": "^6.21.0"
+  },
+  "export": {
+    "exclude": [
+      "test",
+      "tests",
+      ".github"
+    ]
+  }
+}
