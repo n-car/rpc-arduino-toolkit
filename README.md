@@ -4,38 +4,68 @@
 [![Arduino](https://img.shields.io/badge/Arduino-Compatible-green.svg)](https://www.arduino.cc/)
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-Compatible-orange.svg)](https://platformio.org/)
 
-Lightweight JSON-RPC 2.0 client and server library for Arduino, ESP32, ESP8266, and other embedded platforms. Part of the RPC Toolkit ecosystem with cross-platform compatibility.
+Lightweight JSON-RPC 2.0 client and server library for Arduino, ESP32, ESP8266, and other embedded platforms. Part of the RPC Toolkit ecosystem for compatible JSON-RPC integrations.
 
-## 🎯 Features
+## Project Status
+
+RPC Arduino Toolkit is an early public version. Version 1.0.0 is currently in development as the initial public release candidate.
+
+- The API may still change before the first official release.
+- GitHub installation is currently the recommended method.
+- Arduino Library Manager and PlatformIO Registry publication are planned after the first official release is ready.
+
+## Features
 
 ### Core Features
-- **JSON-RPC 2.0 Compliance** - Full spec support with minimal memory footprint
+- **JSON-RPC 2.0 support** - Client/server request handling with a small embedded footprint
 - **Client & Server** - Both RPC client and server implementations
 - **Built-in Introspection** - API discovery with `__rpc.listMethods` and `__rpc.version`
-- **Multiple Transports** - Serial, WiFi, Bluetooth LE, LoRa
+- **Multiple Transports** - Serial and WiFi today, with additional transports planned
 - **Memory Efficient** - Static allocation, minimal RAM usage
-- **Cross-Platform** - Works with Node.js, PHP, and .NET servers
+- **Cross-Platform** - Designed to interoperate with compatible RPC Toolkit clients and servers
 
 ### Supported Platforms
-- ✅ **Arduino** (Uno, Mega, Nano, etc.) - 2KB+ RAM
-- ✅ **ESP32** - WiFi/BLE integrated, 520KB RAM
-- ✅ **ESP8266** - WiFi, 80KB RAM
-- ✅ **STM32** - Via Arduino framework
-- ✅ **Raspberry Pi Pico** (RP2040)
+- **Arduino** (Uno, Mega, Nano, etc.) - 2KB+ RAM
+- **ESP32** - WiFi supported; BLE transport planned
+- **ESP8266** - WiFi supported
+- **STM32** - Via Arduino framework
+- **Raspberry Pi Pico** (RP2040)
 
-### Transport Options
-- **Serial/UART** - USB, hardware serial
+### Supported Transports
+
+Current:
+- **Serial/UART** - USB and hardware serial
 - **WiFi** - ESP32/ESP8266 HTTP client/server
-- **Bluetooth LE** - ESP32 BLE
-- **LoRa** - Long-range IoT communication (optional)
 
-## 📦 Installation
+Planned:
+- **Bluetooth LE** - ESP32 BLE transport
+- **LoRa** - Long-range IoT communication
+- **WebSocket** - Network transport option
+- **mDNS discovery** - Device/service discovery for local networks
 
-### Arduino IDE
-1. Open Arduino IDE
-2. Go to **Sketch > Include Library > Manage Libraries**
-3. Search for "RPC Arduino Toolkit"
-4. Click **Install**
+## Installation
+
+### Arduino IDE - Manual GitHub Installation
+
+The library is not yet published in Arduino Library Manager. Until the first official release is indexed, install it manually from GitHub:
+
+1. Download the repository ZIP from GitHub using **Code > Download ZIP**.
+2. Extract it into your Arduino sketchbook `libraries` directory.
+3. Rename the extracted folder to `RpcArduinoToolkit` if needed.
+4. Restart Arduino IDE.
+
+You can also clone the repository directly:
+
+```bash
+cd ~/Arduino/libraries
+git clone https://github.com/n-car/rpc-arduino-toolkit.git RpcArduinoToolkit
+```
+
+On Windows, the sketchbook libraries directory is usually `Documents/Arduino/libraries`.
+
+### Arduino Library Manager - Planned
+
+Arduino Library Manager installation is planned for a future official release. For now, use the manual GitHub installation method above.
 
 ### PlatformIO
 Add to `platformio.ini`:
@@ -44,16 +74,13 @@ Add to `platformio.ini`:
 platform = espressif32
 board = esp32dev
 framework = arduino
-lib_deps = 
-    n-car/RpcArduinoToolkit
+lib_deps =
+    https://github.com/n-car/rpc-arduino-toolkit.git
 ```
 
-### Manual Installation
-1. Download the latest release
-2. Extract to `Arduino/libraries/RpcArduinoToolkit`
-3. Restart Arduino IDE
+The PlatformIO Registry name will be used only after the library is officially published there.
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Server Example (ESP32 - WiFi)
 
@@ -175,7 +202,7 @@ void loop() {
 }
 ```
 
-## 📚 Advanced Usage
+## Advanced Usage
 
 ### Batch Requests
 
@@ -296,7 +323,7 @@ public:
 };
 ```
 
-## 🎨 Memory Optimization
+## Memory Optimization
 
 ### Static Allocation
 
@@ -361,13 +388,13 @@ bool isBigInt = RpcSafe::isBigInt("123n");       // true
 - String prefix: `S:` - Distinguishes strings from other types
 - Date prefix: `D:` - Marks timestamps/dates
 - BigInt suffix: `n` - Marks large integers (like JavaScript BigInt)
-- Compatible with Express, PHP, .NET, Java implementations
+- Compatible with RPC Toolkit implementations that use the same JSON-RPC conventions
 - Prevents type confusion in JSON serialization
 - Disabled by default (enable with `RPC_ENABLE_SAFE_MODE=1`)
 
 See `examples/SafeMode/` for complete example.
 
-## 🔧 Configuration
+## Configuration
 
 ### RpcConfig.h
 
@@ -391,7 +418,7 @@ See `examples/SafeMode/` for complete example.
 #define RPC_SERIAL_TIMEOUT 1000     // Serial read timeout (ms)
 ```
 
-## 📊 Memory Usage
+## Memory Usage
 
 | Platform | Flash (Code) | RAM (Static) | RAM (Runtime) | Features |
 |----------|--------------|--------------|---------------|----------|
@@ -407,14 +434,16 @@ See `examples/SafeMode/` for complete example.
 
 *Note: Values depend on enabled features and registered methods*
 
-## 🌐 Cross-Platform Compatibility
+## Cross-Platform Compatibility
 
-Works seamlessly with:
-- ✅ **rpc-express-toolkit** (Node.js/Express)
-- ✅ **rpc-php-toolkit** (PHP)
-- ✅ **rpc-dotnet-toolkit** (.NET)
+Designed to work with compatible JSON-RPC clients and servers in the RPC Toolkit ecosystem:
 
-### Example: ESP32 → Node.js Server
+- **rpc-express-toolkit** (Node.js/Express)
+- **rpc-php-toolkit** (PHP)
+- **rpc-dotnet-toolkit** (.NET)
+- **node-red-contrib-rpc-toolkit** (Node-RED)
+
+### Example: ESP32 to Node.js Server
 
 **ESP32 Client:**
 ```cpp
@@ -437,21 +466,17 @@ rpc.addMethod('add', (params) => {
 });
 ```
 
-## 🧪 Examples
+## Examples
 
 See the `examples/` folder for complete working examples:
 
 - **BasicServer** - Simple RPC server on Serial
+- **BasicClient** - Simple RPC client on Serial
 - **WiFiServer** - ESP32 HTTP RPC server
-- **WiFiClient** - ESP32 calling remote server
-- **SerialBridge** - Arduino ↔ ESP32 bridge
-- **SensorHub** - Multi-sensor data collection
-- **BLEServer** - Bluetooth LE RPC server (ESP32)
-- **LoRaNode** - Long-range IoT node
 - **Introspection** - Demonstrates __rpc.* methods and schema support
 - **SafeMode** - Safe serialization with S:, D:, n prefixes
 
-## 📖 API Reference
+## API Reference
 
 ### RpcServer
 
@@ -511,16 +536,16 @@ public:
 };
 ```
 
-## 🔗 Related Projects
+## Related Projects
+
+Compatible projects in the RPC Toolkit ecosystem:
 
 - [rpc-express-toolkit](https://github.com/n-car/rpc-express-toolkit) - Node.js/Express implementation
 - [rpc-php-toolkit](https://github.com/n-car/rpc-php-toolkit) - PHP implementation
 - [rpc-dotnet-toolkit](https://github.com/n-car/rpc-dotnet-toolkit) - .NET implementation
-- [rpc-java-toolkit](https://github.com/n-car/rpc-java-toolkit) - Java & Android implementation
 - [node-red-contrib-rpc-toolkit](https://github.com/n-car/node-red-contrib-rpc-toolkit) - Node-RED visual programming
-- [rpc-arduino-toolkit](https://github.com/n-car/rpc-arduino-toolkit) - Arduino/ESP32 implementation (you are here)
 
-## 🛠️ Development
+## Development
 
 ### Build Examples
 
@@ -541,37 +566,40 @@ pio run -e esp32dev --target upload
 pio test -e native
 ```
 
-## 📝 Roadmap
+## Roadmap
 
-### v1.0.0 (Current Development)
+### v1.0.0 - Initial Public Release Candidate
 - [x] Core RPC client/server
 - [x] Serial transport
-- [x] Basic JSON parser
-- [ ] WiFi transport (ESP32/ESP8266)
-- [ ] Complete examples
-- [ ] Documentation
+- [x] WiFi transport (ESP32/ESP8266)
+- [x] Built-in introspection
+- [x] Batch requests
+- [x] Safe Mode support
+- [x] Basic examples for Serial, WiFi, introspection, and Safe Mode
+- [ ] Finalize public API before official release
+- [ ] Publish first GitHub release
 
-### v1.1.0
+### Planned After v1.0.0
+- [ ] Arduino Library Manager publication
+- [ ] PlatformIO Registry publication
 - [ ] Bluetooth LE transport (ESP32)
-- [ ] Safe Mode support
-- [ ] Batch requests
 - [ ] Schema validation
 
-### v1.2.0
+### Future Transport and Discovery Work
 - [ ] LoRa transport
 - [ ] WebSocket support
 - [ ] mDNS discovery
 - [ ] OTA updates integration
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - Built on [ArduinoJson](https://arduinojson.org/) library
 - Compatible with Arduino Core for ESP32/ESP8266
@@ -579,4 +607,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**RPC Arduino Toolkit** - Bring JSON-RPC 2.0 to your embedded projects.
+**RPC Arduino Toolkit** - JSON-RPC 2.0 for embedded projects.
