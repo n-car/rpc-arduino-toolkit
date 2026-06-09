@@ -19,7 +19,7 @@ RPC Arduino Toolkit is an early public version. Version 1.0.0 is currently in de
 ### Core Features
 - **JSON-RPC 2.0 support** - Client/server request handling with a small embedded footprint
 - **Client & Server** - Both RPC client and server implementations
-- **Built-in Introspection** - API discovery with `__rpc.listMethods` and `__rpc.version`
+- **Built-in Introspection** - API discovery with `__rpc.listMethods`, `__rpc.version`, `__rpc.describe`, and `__rpc.capabilities`
 - **Multiple Transports** - Serial and WiFi today, with additional transports planned
 - **Memory Efficient** - Static allocation, minimal RAM usage
 - **Cross-Platform** - Designed to interoperate with compatible RPC Toolkit clients and servers
@@ -253,7 +253,7 @@ resp = rpc.call("__rpc.describe", "{\"method\":\"add\"}");
 
 // __rpc.capabilities - Get server capabilities
 resp = rpc.call("__rpc.capabilities");
-// Result: {"batch":true,"introspection":true,"safeMode":false,"schemaSupport":true,"methodCount":5,"maxMethods":8}
+// Result: {"batch":true,"introspection":true,"safeMode":false,"notifications":true,"schemaSupport":true,"methodCount":5,"maxMethods":8}
 ```
 
 **Features:**
@@ -354,7 +354,6 @@ rpc.addMethod(FPSTR(METHOD_NAME), []() {
 #define RPC_ENABLE_BATCH 0          // Disable batch (save ~500B)
 #define RPC_ENABLE_SCHEMA_SUPPORT 0 // Disable schema support (save ~200B/method)
 #define RPC_MAX_METHOD_NAME 16      // Limit method name length
-#define RPC_MAX_PARAMS_SIZE 256     // Limit params size
 ```
 
 ### Safe Mode Serialization
@@ -583,7 +582,7 @@ pio test -e native
 - [ ] Arduino Library Manager publication
 - [ ] PlatformIO Registry publication
 - [ ] Bluetooth LE transport (ESP32)
-- [ ] Schema validation
+- [ ] JSON Schema param validation (validate incoming params against a declared schema)
 
 ### Future Transport and Discovery Work
 - [ ] LoRa transport
@@ -593,7 +592,7 @@ pio test -e native
 
 ## Contributing
 
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+Contributions, bug reports, and compatibility feedback are welcome. Please open an issue or pull request on GitHub.
 
 ## License
 
