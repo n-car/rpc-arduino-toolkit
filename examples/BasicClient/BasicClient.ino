@@ -5,7 +5,7 @@
  * via Serial communication.
  * 
  * Hardware:
- * - Arduino Uno/Mega/Nano or compatible
+ * - ESP32/ESP8266 or compatible Arduino core with C++ std::function support
  * 
  * Usage:
  * 1. Upload BasicServer sketch to one Arduino
@@ -19,8 +19,7 @@
 #include <RpcClient.h>
 #include <RpcSerialTransport.h>
 
-// Use Serial1 for RPC communication (Serial for debugging)
-// On Arduino Uno, you'll need SoftwareSerial
+// Uses Serial for RPC communication in this minimal example.
 RpcSerialTransport transport(Serial);
 RpcClient rpc(transport);
 

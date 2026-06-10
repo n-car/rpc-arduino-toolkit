@@ -1,13 +1,13 @@
 /**
  * Basic RPC Server Example - Serial
- * 
+ *
  * This example creates a simple RPC server that communicates over Serial.
  * You can control an LED and read analog values.
- * 
+ *
  * Hardware:
- * - Arduino Uno/Mega/Nano or compatible
- * - LED on pin 13 (or use built-in LED)
- * 
+ * - ESP32/ESP8266 or compatible Arduino core with C++ std::function support
+ * - LED on GPIO 2 or built-in LED
+ *
  * Usage:
  * 1. Upload this sketch
  * 2. Open Serial Monitor at 115200 baud
@@ -21,53 +21,78 @@
 
 // Create RPC server with max 4 methods
 RpcServer<4> rpc;
+StaticJsonDocument<256> rpcResultDoc;
+
+#ifndef LED_BUILTIN
+const int LED_PIN = 2;
+#else
+const int LED_PIN = LED_BUILTIN;
+#endif
+
+JsonVariant makeBoolResult(bool value) {
+    rpcResultDoc.clear();
+    rpcResultDoc.set(value);
+    return rpcResultDoc.as<JsonVariant>();
+}
+
+JsonVariant makeNumberResult(long value) {
+    rpcResultDoc.clear();
+    rpcResultDoc.set(value);
+    return rpcResultDoc.as<JsonVariant>();
+}
+
+JsonVariant makeStringResult(const char* value) {
+    rpcResultDoc.clear();
+    rpcResultDoc.set(value);
+    return rpcResultDoc.as<JsonVariant>();
+}
 
 void setup() {
     Serial.begin(115200);
     while (!Serial) delay(10);
-    
+
     Serial.println("RPC Server Starting...");
-    
+
     // Setup LED pin
-    pinMode(LED_BUILTIN, OUTPUT);
-    
+    pinMode(LED_PIN, OUTPUT);
+
     // Register LED control method
-    rpc.addMethod("setLED", [](JsonObject params) -> JsonVariant {
+    rpc.addMethod("setLED", [](JsonVariantConst params) -> JsonVariant {
         bool state = params["state"] | false;
-        digitalWrite(LED_BUILTIN, state ? HIGH : LOW);
-        
+        digitalWrite(LED_PIN, state ? HIGH : LOW);
+
         Serial.print("LED ");
         Serial.println(state ? "ON" : "OFF");
-        
-        return state;
+
+        return makeBoolResult(state);
     });
-    
+
     // Register analog read method
-    rpc.addMethod("readAnalog", [](JsonObject params) -> JsonVariant {
+    rpc.addMethod("readAnalog", [](JsonVariantConst params) -> JsonVariant {
         int pin = params["pin"] | 0;
         int value = analogRead(pin);
-        
+
         Serial.print("Analog pin ");
         Serial.print(pin);
         Serial.print(": ");
         Serial.println(value);
-        
-        return value;
+
+        return makeNumberResult(value);
     });
-    
+
     // Register ping method
     rpc.addMethod("ping", []() -> JsonVariant {
-        return "pong";
+        return makeStringResult("pong");
     });
-    
+
     // Register getStatus method
     rpc.addMethod("getStatus", []() -> JsonVariant {
-        StaticJsonDocument<128> doc;
-        doc["uptime"] = millis();
-        doc["freeMem"] = freeMemory();
-        return doc.as<JsonVariant>();
+        rpcResultDoc.clear();
+        rpcResultDoc["uptime"] = millis();
+        rpcResultDoc["freeMem"] = freeMemory();
+        return rpcResultDoc.as<JsonVariant>();
     });
-    
+
     Serial.println("RPC Server Ready!");
     Serial.println("Registered methods:");
     Serial.println("  - setLED");
@@ -82,9 +107,9 @@ void loop() {
     if (Serial.available()) {
         RpcSerialTransport transport(Serial);
         String response = rpc.handleRequest(transport);
-        
+
         // Send response if not a notification
-        if (!response.isEmpty()) {
+        if (response.length() > 0) {
             Serial.println(response);
         }
     }

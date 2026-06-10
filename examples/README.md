@@ -28,20 +28,15 @@ RPC client that calls methods on a remote server via Serial. Demonstrates:
 ### WiFiServer (ESP32/ESP8266)
 HTTP-based RPC server with WiFi. Demonstrates:
 - WiFi connectivity
-- HTTP transport
+- HTTP server transport
 - Web-based RPC calls
 
 **Hardware:** ESP32 or ESP8266
 
 **Usage:** Access via HTTP POST to device IP
 
-### WiFiClient (ESP32/ESP8266)
-WiFi client calling remote RPC servers. Demonstrates:
-- HTTP client
-- Calling Node.js/PHP servers
-- Cross-platform RPC
-
-**Hardware:** ESP32 or ESP8266
+### HTTP Client
+Use `RpcHttpClientTransport` with `WiFiClient`, `EthernetClient`, or another Arduino `Client` implementation to call remote JSON-RPC HTTP endpoints.
 
 ## Running Examples
 

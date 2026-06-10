@@ -12,6 +12,8 @@
 #include "RpcTypes.h"
 #include "RpcTransport.h"
 #include "RpcSerialTransport.h"
+#include "RpcHttpClientTransport.h"
+#include "RpcHttpServerTransport.h"
 #include "RpcServer.h"
 #include "RpcClient.h"
 

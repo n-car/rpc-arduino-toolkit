@@ -20,22 +20,27 @@ RPC Arduino Toolkit is an early public version. Version 1.0.0 is currently in de
 - **JSON-RPC 2.0 support** - Client/server request handling with a small embedded footprint
 - **Client & Server** - Both RPC client and server implementations
 - **Built-in Introspection** - API discovery with `__rpc.listMethods`, `__rpc.version`, `__rpc.describe`, and `__rpc.capabilities`
-- **Multiple Transports** - Serial and WiFi today, with additional transports planned
+- **Multiple Transports** - Serial plus HTTP client/server transports over Arduino `Client` sockets
 - **Memory Efficient** - Static allocation, minimal RAM usage
 - **Cross-Platform** - Designed to interoperate with compatible RPC Toolkit clients and servers
 
 ### Supported Platforms
-- **Arduino** (Uno, Mega, Nano, etc.) - 2KB+ RAM
-- **ESP32** - WiFi supported; BLE transport planned
-- **ESP8266** - WiFi supported
-- **STM32** - Via Arduino framework
-- **Raspberry Pi Pico** (RP2040)
+- **ESP32** - Current validation target; WiFi/HTTP supported
+- **ESP8266** - WiFi/HTTP supported by design through Arduino `Client` sockets
+- **Arduino-compatible cores with C++ `std::function` support** - Serial transport and core RPC types
+- **STM32 / RP2040** - Planned validation through the Arduino framework
+
+AVR boards such as Uno, Mega, and Nano are not a validated target for the current implementation.
 
 ### Supported Transports
 
 Current:
 - **Serial/UART** - USB and hardware serial
-- **WiFi** - ESP32/ESP8266 HTTP client/server
+- **HTTP client transport** - `RpcHttpClientTransport` over Arduino `Client` sockets for calling remote JSON-RPC HTTP endpoints
+- **HTTP server transport** - `RpcHttpServerTransport` over Arduino `Client` sockets, usable with `WiFiClient`, `EthernetClient`, and compatible clients
+
+Compatibility:
+- **RpcWiFiTransport** - deprecated compatibility wrapper for `RpcHttpServerTransport`
 
 Planned:
 - **Bluetooth LE** - ESP32 BLE transport
@@ -87,15 +92,28 @@ The PlatformIO Registry name will be used only after the library is officially p
 ```cpp
 #include <WiFi.h>
 #include <RpcServer.h>
-#include <RpcWiFiTransport.h>
+#include <RpcHttpServerTransport.h>
 
 // Create server with max 8 methods
 RpcServer<8> rpc;
 WiFiServer server(8080);
+StaticJsonDocument<128> resultDoc;
+
+JsonVariant makeBoolResult(bool value) {
+    resultDoc.clear();
+    resultDoc.set(value);
+    return resultDoc.as<JsonVariant>();
+}
+
+JsonVariant makeNumberResult(float value) {
+    resultDoc.clear();
+    resultDoc.set(value);
+    return resultDoc.as<JsonVariant>();
+}
 
 void setup() {
     Serial.begin(115200);
-    
+
     // Connect to WiFi
     WiFi.begin("YourSSID", "YourPassword");
     while (WiFi.status() != WL_CONNECTED) {
@@ -104,31 +122,31 @@ void setup() {
     }
     Serial.println("\nConnected!");
     Serial.println(WiFi.localIP());
-    
+
     // Register methods
-    rpc.addMethod("led", [](JsonObject params) -> JsonVariant {
+    rpc.addMethod("led", [](JsonVariantConst params) -> JsonVariant {
         int pin = params["pin"];
         bool state = params["state"];
         digitalWrite(pin, state ? HIGH : LOW);
-        return true;
+        return makeBoolResult(true);
     });
-    
+
     rpc.addMethod("readTemp", []() -> JsonVariant {
         // Read temperature sensor (example)
         float temp = analogRead(A0) * 0.1;
-        return temp;
+        return makeNumberResult(temp);
     });
-    
+
     // Start server
     server.begin();
 }
 
 void loop() {
-    WiFiClient client = server.available();
+    WiFiClient client = server.accept();
     if (client) {
-        RpcWiFiTransport transport(client);
+        RpcHttpServerTransport transport(client);
         String response = rpc.handleRequest(transport);
-        client.print(response);
+        transport.write(response);
         client.stop();
     }
 }
@@ -151,18 +169,18 @@ void setup() {
 void loop() {
     // Call remote method
     RpcResponse resp = rpc.call("readTemp");
-    
+
     if (resp.isSuccess()) {
         float temp = resp.result<float>();
         Serial.print("Temperature: ");
         Serial.println(temp);
-        
+
         // Control LED based on temperature
         if (temp > 30.0) {
             rpc.call("led", "{\"pin\":13,\"state\":true}");
         }
     }
-    
+
     delay(1000);
 }
 ```
@@ -174,22 +192,35 @@ void loop() {
 #include <RpcSerialTransport.h>
 
 RpcServer<4> rpc;
+StaticJsonDocument<64> resultDoc;
+
+JsonVariant makeBoolResult(bool value) {
+    resultDoc.clear();
+    resultDoc.set(value);
+    return resultDoc.as<JsonVariant>();
+}
+
+JsonVariant makeNumberResult(int value) {
+    resultDoc.clear();
+    resultDoc.set(value);
+    return resultDoc.as<JsonVariant>();
+}
 
 void setup() {
     Serial.begin(115200);
     pinMode(LED_BUILTIN, OUTPUT);
-    
+
     // Register LED control
-    rpc.addMethod("setLED", [](JsonObject params) -> JsonVariant {
+    rpc.addMethod("setLED", [](JsonVariantConst params) -> JsonVariant {
         bool state = params["state"];
         digitalWrite(LED_BUILTIN, state ? HIGH : LOW);
-        return state;
+        return makeBoolResult(state);
     });
-    
+
     // Register analog read
-    rpc.addMethod("readAnalog", [](JsonObject params) -> JsonVariant {
+    rpc.addMethod("readAnalog", [](JsonVariantConst params) -> JsonVariant {
         int pin = params["pin"];
-        return analogRead(pin);
+        return makeNumberResult(analogRead(pin));
     });
 }
 
@@ -204,15 +235,43 @@ void loop() {
 
 ## Advanced Usage
 
+### Server Params
+
+Server method handlers receive `JsonVariantConst` params, so they can read standard JSON-RPC object params and array params without copying.
+
+```cpp
+rpc.addMethod("sum", [](JsonVariantConst params) -> JsonVariant {
+    JsonArrayConst values = params.as<JsonArrayConst>();
+    int total = 0;
+
+    for (JsonVariantConst value : values) {
+        total += value.as<int>();
+    }
+
+    // Store owned results in a document that remains alive until serialization.
+    static StaticJsonDocument<64> resultDoc;
+    resultDoc.clear();
+    resultDoc.set(total);
+    return resultDoc.as<JsonVariant>();
+});
+```
+
 ### Batch Requests
 
 ```cpp
 // Client sends multiple requests at once
 String batch = "[{\"jsonrpc\":\"2.0\",\"method\":\"readTemp\",\"id\":1},"
                "{\"jsonrpc\":\"2.0\",\"method\":\"readHumidity\",\"id\":2}]";
-               
-RpcResponse resp = rpc.callBatch(batch);
+
+RpcBatchResponse batchResp = rpc.callBatch(batch);
+
+if (batchResp.isValid() && batchResp.count() == 2) {
+    float temp = batchResp.result(0).as<float>();
+    float humidity = batchResp.result(1).as<float>();
+}
 ```
+
+`RpcServer` also accepts JSON-RPC batch request arrays when `RPC_ENABLE_BATCH` is enabled. Notifications inside a batch are executed without response entries; if all batch items are notifications, HTTP transports return `204 No Content`.
 
 ### Notifications (No Response)
 
@@ -266,16 +325,30 @@ resp = rpc.call("__rpc.capabilities");
 **Register methods with schema information:**
 
 ```cpp
+StaticJsonDocument<64> resultDoc;
+
+JsonVariant makeStringResult(const char* value) {
+    resultDoc.clear();
+    resultDoc.set(value);
+    return resultDoc.as<JsonVariant>();
+}
+
+JsonVariant makeNumberResult(int value) {
+    resultDoc.clear();
+    resultDoc.set(value);
+    return resultDoc.as<JsonVariant>();
+}
+
 // Simple method without schema
 rpc.addMethod("ping", []() -> JsonVariant {
-    return "pong";
+    return makeStringResult("pong");
 });
 
 // Method with description and schema exposure
-rpc.addMethod("add", [](JsonObject params) -> JsonVariant {
+rpc.addMethod("add", [](JsonVariantConst params) -> JsonVariant {
     int a = params["a"] | 0;
     int b = params["b"] | 0;
-    return a + b;
+    return makeNumberResult(a + b);
 }, "Add two numbers", true);  // description, exposeSchema
 ```
 
@@ -315,7 +388,7 @@ public:
         // Read from your custom interface
         return readFromCustomInterface();
     }
-    
+
     void write(const String& data) override {
         // Write to your custom interface
         writeToCustomInterface(data);
@@ -335,14 +408,21 @@ RpcServer<8> server;  // 8 methods max
 StaticJsonDocument<512> doc;
 ```
 
-### Flash Storage (PROGMEM)
+### Handler Result Storage
+
+Handlers return `JsonVariant` views. Store owned scalar/object results in a document that remains alive until the response is serialized:
 
 ```cpp
-// Store strings in flash memory
-const char METHOD_NAME[] PROGMEM = "myMethod";
+StaticJsonDocument<64> resultDoc;
 
-rpc.addMethod(FPSTR(METHOD_NAME), []() {
-    return 42;
+JsonVariant makeNumberResult(int value) {
+    resultDoc.clear();
+    resultDoc.set(value);
+    return resultDoc.as<JsonVariant>();
+}
+
+rpc.addMethod("answer", []() -> JsonVariant {
+    return makeNumberResult(42);
 });
 ```
 
@@ -351,7 +431,6 @@ rpc.addMethod(FPSTR(METHOD_NAME), []() {
 ```cpp
 // In RpcConfig.h or build flags
 #define RPC_ENABLE_SAFE_MODE 0      // Disable safe mode (save ~1KB)
-#define RPC_ENABLE_BATCH 0          // Disable batch (save ~500B)
 #define RPC_ENABLE_SCHEMA_SUPPORT 0 // Disable schema support (save ~200B/method)
 #define RPC_MAX_METHOD_NAME 16      // Limit method name length
 ```
@@ -407,7 +486,7 @@ See `examples/SafeMode/` for complete example.
 
 // Features
 #define RPC_ENABLE_SAFE_MODE 0      // Enable safe serialization (S:, D:, n)
-#define RPC_ENABLE_BATCH 1          // Enable batch requests
+#define RPC_ENABLE_BATCH 1          // Enable JSON-RPC batch requests
 #define RPC_ENABLE_LOGGING 0        // Enable debug logging
 #define RPC_ENABLE_NOTIFICATIONS 1  // Enable fire-and-forget calls
 #define RPC_ENABLE_SCHEMA_SUPPORT 1 // Enable method descriptions
@@ -421,15 +500,12 @@ See `examples/SafeMode/` for complete example.
 
 | Platform | Flash (Code) | RAM (Static) | RAM (Runtime) | Features |
 |----------|--------------|--------------|---------------|----------|
-| Arduino Uno | ~8KB | ~200B | ~512B | Basic |
-| Arduino Uno + Schema | ~9KB | ~400B | ~512B | +Schema |
 | ESP32 | ~12KB | ~300B | ~1KB | Full |
 | ESP8266 | ~10KB | ~250B | ~800B | Full |
 
 **Feature Impact:**
 - `RPC_ENABLE_SCHEMA_SUPPORT=1`: +200 bytes per method (description storage)
 - `RPC_ENABLE_SAFE_MODE=1`: +1KB Flash, +50 bytes RAM
-- `RPC_ENABLE_BATCH=1`: +500 bytes Flash
 
 *Note: Values depend on enabled features and registered methods*
 
@@ -444,16 +520,22 @@ Designed to work with compatible JSON-RPC clients and servers in the RPC Toolkit
 
 ### Example: ESP32 to Node.js Server
 
+Use `RpcHttpClientTransport` to call a remote JSON-RPC HTTP endpoint from an ESP32 client.
+
 **ESP32 Client:**
 ```cpp
-WiFiClient client;
-client.connect("192.168.1.100", 3000);
+#include <WiFi.h>
+#include <RpcClient.h>
+#include <RpcHttpClientTransport.h>
 
-RpcWiFiTransport transport(client);
+WiFiClient httpClient;
+RpcHttpClientTransport transport(httpClient, "192.168.1.100", 3000, "/api");
 RpcClient rpc(transport);
 
 float result = rpc.call("add", "{\"a\":5,\"b\":3}").result<float>();
 ```
+
+See `rpc-tests/rpc-arduino-toolkit/wifi/client` in this workspace for the physical ESP32 compatibility test project.
 
 **Node.js Server (Express):**
 ```javascript
@@ -485,11 +567,17 @@ class RpcServer {
 public:
     // Register a method
     bool addMethod(const char* name, RpcMethodHandler handler);
-    
+    bool addMethod(const char* name, RpcMethodHandler handler, const char* description, bool exposeSchema = false);
+    bool addMethod(const char* name, RpcSimpleHandler handler);
+    bool addMethod(const char* name, RpcSimpleHandler handler, const char* description, bool exposeSchema = false);
+
+    // Handler signature
+    // JsonVariant handler(JsonVariantConst params);
+
     // Handle incoming request
     String handleRequest(RpcTransport& transport);
     String handleRequest(const String& json);
-    
+
     // Remove a method
     bool removeMethod(const char* name);
 };
@@ -501,19 +589,61 @@ public:
 class RpcClient {
 public:
     RpcClient(RpcTransport& transport);
-    
+
     // Call remote method
     RpcResponse call(const char* method, const String& params = "");
     RpcResponse call(const char* method, JsonObject params);
-    
+
     // Send notification (no response)
     void notify(const char* method, const String& params = "");
-    
+
     // Batch request
-    RpcResponse callBatch(const String& batch);
-    
+    RpcBatchResponse callBatch(const String& batch);
+
     // Set timeout
     void setTimeout(unsigned long ms);
+};
+```
+
+### RpcHttpServerTransport
+
+```cpp
+class RpcHttpServerTransport : public RpcTransport {
+public:
+    explicit RpcHttpServerTransport(Client& client);
+};
+```
+
+`RpcWiFiTransport` remains available as a deprecated compatibility wrapper for existing sketches. New code should use `RpcHttpServerTransport`.
+
+### RpcHttpClientTransport
+
+```cpp
+class RpcHttpClientTransport : public RpcTransport {
+public:
+    RpcHttpClientTransport(Client& client, const char* host, uint16_t port, const char* path = "/");
+
+    void setSocketSettleDelay(unsigned long ms);
+    const String& lastError() const;
+    int lastStatus() const;
+};
+```
+
+### RpcBatchResponse
+
+```cpp
+class RpcBatchResponse {
+public:
+    bool isValid() const;
+    bool isBatch() const;
+    bool isSuccess() const;
+    size_t count() const;
+
+    JsonVariantConst response(size_t index) const;
+    JsonVariantConst result(size_t index) const;
+    bool hasError(size_t index) const;
+    int errorCode(size_t index) const;
+    String errorMessage(size_t index) const;
 };
 ```
 
@@ -524,11 +654,11 @@ class RpcResponse {
 public:
     bool isSuccess() const;
     bool hasError() const;
-    
+
     // Get result
     template<typename T>
     T result() const;
-    
+
     // Get error
     int errorCode() const;
     String errorMessage() const;
@@ -551,7 +681,6 @@ Compatible projects in the RPC Toolkit ecosystem:
 ```bash
 # Using PlatformIO
 pio run -e esp32dev
-pio run -e arduino_uno
 pio run -e esp8266
 
 # Upload to device
@@ -570,7 +699,8 @@ pio test -e native
 ### v1.0.0 - Initial Public Release Candidate
 - [x] Core RPC client/server
 - [x] Serial transport
-- [x] WiFi transport (ESP32/ESP8266)
+- [x] HTTP client transport over Arduino Client-compatible sockets
+- [x] HTTP server transport over Arduino Client-compatible sockets
 - [x] Built-in introspection
 - [x] Batch requests
 - [x] Safe Mode support

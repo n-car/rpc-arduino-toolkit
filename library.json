@@ -11,8 +11,8 @@
     "esp32",
     "esp8266",
     "wifi",
+    "http",
     "serial",
-    "bluetooth",
     "iot"
   ],
   "repository": {
@@ -29,7 +29,7 @@
   "license": "MIT",
   "homepage": "https://github.com/n-car/rpc-arduino-toolkit",
   "frameworks": "arduino",
-  "platforms": ["espressif32", "espressif8266", "atmelavr", "ststm32"],
+  "platforms": ["espressif32", "espressif8266"],
   "dependencies": {
     "bblanchon/ArduinoJson": "^6.21.0"
   },

@@ -26,10 +26,24 @@ private:
         bool exposeSchema;
 #endif
     };
-    
+
     Method methods[MAX_METHODS];
     uint8_t methodCount;
-    
+
+    // Parse request from a deserialized JSON value
+    bool parseRequest(JsonVariant item, RpcRequest& req) {
+        if (!item.is<JsonObject>()) {
+            return false;
+        }
+
+        req.jsonrpc = item["jsonrpc"] | "";
+        req.method = item["method"] | "";
+        req.params = item["params"].as<JsonVariantConst>();
+        req.id = item["id"];
+
+        return req.isValid();
+    }
+
     // Parse request from JSON
     bool parseRequest(const String& json, RpcRequest& req, StaticJsonDocument<RPC_JSON_DOC_SIZE>& doc) {
         DeserializationError error = deserializeJson(doc, json);
@@ -37,60 +51,55 @@ private:
             RPC_LOG_F("Parse error: %s", error.c_str());
             return false;
         }
-        
-        req.jsonrpc = doc["jsonrpc"] | "";
-        req.method = doc["method"] | "";
-        req.params = doc["params"].as<JsonObject>();
-        req.id = doc["id"];
-        
-        return req.isValid();
+
+        return parseRequest(doc.as<JsonVariant>(), req);
     }
-    
+
     // Execute method
     RpcResponse executeMethod(RpcRequest& req) {
-        RpcResponse resp;
-        
         // Built-in introspection methods (memory-efficient)
         if (req.method == "__rpc.listMethods") {
             StaticJsonDocument<256> doc;
             JsonArray arr = doc.to<JsonArray>();
-            
+
             for (uint8_t i = 0; i < MAX_METHODS; i++) {
                 if (methods[i].active) {
                     arr.add(methods[i].name);
                 }
             }
-            
+
+            RpcResponse resp;
             resp.setResult(doc.as<JsonVariant>(), req.id);
             return resp;
         }
-        
+
         if (req.method == "__rpc.version") {
             StaticJsonDocument<128> doc;
             doc["toolkit"] = "rpc-arduino-toolkit";
             doc["version"] = "1.0.0";
             doc["methodCount"] = methodCount;
-            
+
+            RpcResponse resp;
             resp.setResult(doc.as<JsonVariant>(), req.id);
             return resp;
         }
-        
+
 #if RPC_ENABLE_SCHEMA_SUPPORT
         // __rpc.describe - Get method description and schema availability
         if (req.method == "__rpc.describe") {
             const char* methodName = req.params["method"] | "";
-            
+
             if (strlen(methodName) == 0) {
                 return RpcError::invalidParams(req.id);
             }
-            
+
             // Prevent introspection of __rpc.* methods
             if (strncmp(methodName, "__rpc.", 6) == 0) {
                 RpcResponse resp;
                 resp.setError(RPC_ERROR_METHOD_NOT_FOUND, "Cannot describe introspection methods", req.id);
                 return resp;
             }
-            
+
             // Find method
             Method* method = nullptr;
             for (uint8_t i = 0; i < MAX_METHODS; i++) {
@@ -99,43 +108,45 @@ private:
                     break;
                 }
             }
-            
+
             if (!method) {
                 return RpcError::methodNotFound(methodName, req.id);
             }
-            
+
             // Check if schema is exposed
             if (!method->exposeSchema) {
                 RpcResponse resp;
                 resp.setError(RPC_ERROR_METHOD_NOT_FOUND, "Method schema not available", req.id);
                 return resp;
             }
-            
+
             StaticJsonDocument<256> doc;
             doc["name"] = method->name;
             doc["description"] = method->description;
             doc["exposeSchema"] = method->exposeSchema;
-            
+
+            RpcResponse resp;
             resp.setResult(doc.as<JsonVariant>(), req.id);
             return resp;
         }
 #endif
-        
+
         // __rpc.capabilities - Get server capabilities
         if (req.method == "__rpc.capabilities") {
             StaticJsonDocument<256> doc;
-            doc["batch"] = RPC_ENABLE_BATCH;
+            doc["batch"] = (RPC_ENABLE_BATCH != 0);
             doc["introspection"] = true;
-            doc["safeMode"] = RPC_ENABLE_SAFE_MODE;
-            doc["notifications"] = RPC_ENABLE_NOTIFICATIONS;
-            doc["schemaSupport"] = RPC_ENABLE_SCHEMA_SUPPORT;
+            doc["safeMode"] = (RPC_ENABLE_SAFE_MODE != 0);
+            doc["notifications"] = (RPC_ENABLE_NOTIFICATIONS != 0);
+            doc["schemaSupport"] = (RPC_ENABLE_SCHEMA_SUPPORT != 0);
             doc["methodCount"] = methodCount;
             doc["maxMethods"] = MAX_METHODS;
-            
+
+            RpcResponse resp;
             resp.setResult(doc.as<JsonVariant>(), req.id);
             return resp;
         }
-        
+
         // Find method
         Method* method = nullptr;
         for (uint8_t i = 0; i < MAX_METHODS; i++) {
@@ -144,22 +155,73 @@ private:
                 break;
             }
         }
-        
+
         if (!method) {
             return RpcError::methodNotFound(req.method.c_str(), req.id);
         }
-        
+
         // Execute handler
         try {
             JsonVariant result = method->handler(req.params);
+            RpcResponse resp;
             resp.setResult(result, req.id);
+            return resp;
         } catch (...) {
             return RpcError::internalError(req.id);
         }
-        
-        return resp;
     }
-    
+
+#if RPC_ENABLE_BATCH
+    String handleBatchRequest(JsonArray batch) {
+        if (batch.size() == 0) {
+            RpcResponse resp = RpcError::invalidRequest(JsonVariant());
+            return resp.toString();
+        }
+
+        String output;
+        output.reserve(RPC_MAX_RESPONSE_SIZE);
+        output += '[';
+        bool hasResponse = false;
+
+        for (JsonVariant item : batch) {
+            String responseJson;
+            bool includeResponse = true;
+
+            if (!item.is<JsonObject>()) {
+                responseJson = RpcError::invalidRequest(JsonVariant()).toString();
+            } else {
+                RpcRequest req;
+                if (!parseRequest(item, req)) {
+                    JsonVariant id = item["id"];
+                    responseJson = RpcError::invalidRequest(id).toString();
+                } else if (req.isNotification()) {
+                    executeMethod(req);
+                    includeResponse = false;
+                } else {
+                    responseJson = executeMethod(req).toString();
+                }
+            }
+
+            if (!includeResponse) {
+                continue;
+            }
+
+            if (hasResponse) {
+                output += ',';
+            }
+            output += responseJson;
+            hasResponse = true;
+        }
+
+        if (!hasResponse) {
+            return "";
+        }
+
+        output += ']';
+        return output;
+    }
+#endif
+
 public:
     RpcServer() : methodCount(0) {
         for (uint8_t i = 0; i < MAX_METHODS; i++) {
@@ -170,7 +232,7 @@ public:
 #endif
         }
     }
-    
+
     /**
      * Register a method
      * @param name Method name
@@ -180,7 +242,7 @@ public:
     bool addMethod(const char* name, RpcMethodHandler handler) {
         return addMethod(name, handler, "", false);
     }
-    
+
 #if RPC_ENABLE_SCHEMA_SUPPORT
     /**
      * Register a method with description and schema exposure
@@ -198,12 +260,12 @@ public:
             RPC_LOG("Max methods reached!");
             return false;
         }
-        
+
         if (strlen(name) >= RPC_MAX_METHOD_NAME) {
             RPC_LOG("Method name too long!");
             return false;
         }
-        
+
         // Find free slot
         for (uint8_t i = 0; i < MAX_METHODS; i++) {
             if (!methods[i].active) {
@@ -220,24 +282,35 @@ public:
                 (void)exposeSchema;
 #endif
                 methodCount++;
-                
+
                 RPC_LOG_F("Method registered: %s", name);
                 return true;
             }
         }
-        
+
         return false;
     }
-    
+
     /**
      * Register a simple method (no parameters)
      */
     bool addMethod(const char* name, RpcSimpleHandler handler) {
-        return addMethod(name, [handler](JsonObject params) -> JsonVariant {
+        return addMethod(name, [handler](JsonVariantConst params) -> JsonVariant {
+            (void)params;
             return handler();
         });
     }
-    
+
+    /**
+     * Register a simple method with description/schema metadata
+     */
+    bool addMethod(const char* name, RpcSimpleHandler handler, const char* description, bool exposeSchema = false) {
+        return addMethod(name, [handler](JsonVariantConst params) -> JsonVariant {
+            (void)params;
+            return handler();
+        }, description, exposeSchema);
+    }
+
     /**
      * Remove a method
      */
@@ -252,7 +325,7 @@ public:
         }
         return false;
     }
-    
+
     /**
      * Handle request from transport
      */
@@ -261,34 +334,48 @@ public:
         if (json.isEmpty()) {
             return "";
         }
-        
+
         return handleRequest(json);
     }
-    
+
     /**
      * Handle request from JSON string
      */
     String handleRequest(const String& json) {
         StaticJsonDocument<RPC_JSON_DOC_SIZE> doc;
-        RpcRequest req;
-        
-        // Parse request
-        if (!parseRequest(json, req, doc)) {
-            RpcResponse resp = RpcError::parseError(nullptr);
+        DeserializationError error = deserializeJson(doc, json);
+        if (error) {
+            RPC_LOG_F("Parse error: %s", error.c_str());
+            RpcResponse resp = RpcError::parseError(JsonVariant());
             return resp.toString();
         }
-        
+
+        if (doc.is<JsonArray>()) {
+#if RPC_ENABLE_BATCH
+            return handleBatchRequest(doc.as<JsonArray>());
+#else
+            RpcResponse resp = RpcError::invalidRequest(JsonVariant());
+            return resp.toString();
+#endif
+        }
+
+        RpcRequest req;
+        if (!parseRequest(doc.as<JsonVariant>(), req)) {
+            RpcResponse resp = RpcError::invalidRequest(JsonVariant());
+            return resp.toString();
+        }
+
         // Notification? (no response needed)
         if (req.isNotification()) {
             executeMethod(req);
             return "";
         }
-        
+
         // Execute and return response
         RpcResponse resp = executeMethod(req);
         return resp.toString();
     }
-    
+
     /**
      * Get number of registered methods
      */
