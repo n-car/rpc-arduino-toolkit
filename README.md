@@ -535,7 +535,7 @@ RpcClient rpc(transport);
 float result = rpc.call("add", "{\"a\":5,\"b\":3}").result<float>();
 ```
 
-See `rpc-tests/rpc-arduino-toolkit/wifi/client` in this workspace for the physical ESP32 compatibility test project.
+Physical ESP32 interoperability tests are maintained separately during development.
 
 **Node.js Server (Express):**
 ```javascript

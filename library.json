@@ -4,16 +4,20 @@
   "description": "Lightweight JSON-RPC 2.0 client and server for Arduino, ESP32, ESP8266 with multiple transport options",
   "keywords": [
     "json-rpc",
+    "json-rpc2",
     "rpc",
     "client",
     "server",
     "arduino",
     "esp32",
     "esp8266",
+    "embedded",
+    "platformio",
     "wifi",
     "http",
     "serial",
-    "iot"
+    "iot",
+    "edge"
   ],
   "repository": {
     "type": "git",
