@@ -51,7 +51,7 @@
   #define RPC_ENABLE_SAFE_MODE 0  // Disabled by default to save memory
 #endif
 
-// Enable batch requests
+// Enable JSON-RPC batch handling in RpcServer and RpcClient::callBatch
 #ifndef RPC_ENABLE_BATCH
   #define RPC_ENABLE_BATCH 1
 #endif
@@ -93,6 +93,11 @@
 // WiFi connection timeout
 #ifndef RPC_WIFI_TIMEOUT
   #define RPC_WIFI_TIMEOUT 10000
+#endif
+
+// HTTP transport timeout
+#ifndef RPC_HTTP_TIMEOUT
+  #define RPC_HTTP_TIMEOUT RPC_WIFI_TIMEOUT
 #endif
 
 // ============================================================================

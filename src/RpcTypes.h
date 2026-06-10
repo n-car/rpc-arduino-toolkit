@@ -16,14 +16,15 @@
 class RpcTransport;
 class RpcRequest;
 class RpcResponse;
+class RpcBatchResponse;
 
 // ============================================================================
 // Type Definitions
 // ============================================================================
 
 // Method handler function signature
-// Takes JsonObject parameters and returns JsonVariant result
-typedef std::function<JsonVariant(JsonObject)> RpcMethodHandler;
+// Takes read-only JSON-RPC parameters and returns JsonVariant result
+typedef std::function<JsonVariant(JsonVariantConst)> RpcMethodHandler;
 
 // Simple handler without parameters
 typedef std::function<JsonVariant(void)> RpcSimpleHandler;
@@ -36,15 +37,15 @@ class RpcRequest {
 public:
     String jsonrpc;        // Always "2.0"
     String method;         // Method name
-    JsonObject params;     // Method parameters
+    JsonVariantConst params; // Method parameters
     JsonVariant id;        // Request ID (null for notifications)
-    
+
     RpcRequest() : jsonrpc("2.0") {}
-    
+
     bool isNotification() const {
         return id.isNull();
     }
-    
+
     bool isValid() const {
         return jsonrpc == "2.0" && !method.isEmpty();
     }
@@ -59,10 +60,10 @@ private:
     StaticJsonDocument<RPC_JSON_DOC_SIZE> doc;
     bool _hasError;
     bool _isValid;
-    
+
 public:
     RpcResponse() : _hasError(false), _isValid(false) {}
-    
+
     // Success response
     void setResult(JsonVariant result, JsonVariant id) {
         doc.clear();
@@ -72,7 +73,7 @@ public:
         _hasError = false;
         _isValid = true;
     }
-    
+
     // Error response
     void setError(int code, const char* message, JsonVariant id) {
         doc.clear();
@@ -84,7 +85,18 @@ public:
         _hasError = true;
         _isValid = true;
     }
-    
+
+    void setError(int code, const String& message, JsonVariant id) {
+        doc.clear();
+        doc["jsonrpc"] = "2.0";
+        JsonObject error = doc.createNestedObject("error");
+        error["code"] = code;
+        error["message"] = message;
+        doc["id"] = id;
+        _hasError = true;
+        _isValid = true;
+    }
+
     // Parse from JSON string
     bool parse(const String& json) {
         DeserializationError error = deserializeJson(doc, json);
@@ -93,51 +105,183 @@ public:
             _isValid = false;
             return false;
         }
-        
+
         _hasError = doc.containsKey("error");
         _isValid = doc["jsonrpc"] == "2.0";
         return _isValid;
     }
-    
+
     // Serialize to JSON string
     String toString() const {
         String output;
         serializeJson(doc, output);
         return output;
     }
-    
+
     // Check if response has error
     bool hasError() const { return _hasError; }
     bool isSuccess() const { return _isValid && !_hasError; }
     bool isValid() const { return _isValid; }
-    
+
     // Get result as specific type
     template<typename T>
     T result() const {
         if (_hasError) return T();
         return doc["result"].as<T>();
     }
-    
-    // Get result as JsonVariant
-    JsonVariant result() const {
+
+    // Get result as read-only JsonVariant
+    JsonVariantConst result() const {
         return doc["result"];
     }
-    
+
     // Get error code
     int errorCode() const {
         if (!_hasError) return 0;
         return doc["error"]["code"];
     }
-    
+
     // Get error message
     String errorMessage() const {
         if (!_hasError) return "";
         return doc["error"]["message"].as<String>();
     }
-    
+
     // Get ID
-    JsonVariant id() const {
+    JsonVariantConst id() const {
         return doc["id"];
+    }
+};
+
+// ============================================================================
+// RPC Batch Response
+// ============================================================================
+
+class RpcBatchResponse {
+private:
+    StaticJsonDocument<RPC_JSON_DOC_SIZE> doc;
+    bool _isValid;
+    bool _isBatch;
+
+    JsonVariantConst itemAt(size_t index) const {
+        if (!_isValid) {
+            return JsonVariantConst();
+        }
+
+        if (_isBatch) {
+            JsonArrayConst arr = doc.as<JsonArrayConst>();
+            return arr[index];
+        }
+
+        return index == 0 ? doc.as<JsonVariantConst>() : JsonVariantConst();
+    }
+
+public:
+    RpcBatchResponse() : _isValid(false), _isBatch(false) {}
+
+    // Parse from JSON string. Valid batch responses are arrays; a single
+    // JSON-RPC error object is accepted for invalid batch requests.
+    bool parse(const String& json) {
+        DeserializationError error = deserializeJson(doc, json);
+        if (error) {
+            RPC_LOG_F("Failed to parse batch response: %s", error.c_str());
+            _isValid = false;
+            _isBatch = false;
+            return false;
+        }
+
+        if (doc.is<JsonArray>()) {
+            _isValid = true;
+            _isBatch = true;
+            return true;
+        }
+
+        if (doc.is<JsonObject>() && doc["jsonrpc"] == "2.0" && doc.containsKey("error")) {
+            _isValid = true;
+            _isBatch = false;
+            return true;
+        }
+
+        _isValid = false;
+        _isBatch = false;
+        return false;
+    }
+
+    // Error response for local transport failures/timeouts.
+    void setError(int code, const char* message) {
+        doc.clear();
+        doc["jsonrpc"] = "2.0";
+        JsonObject error = doc.createNestedObject("error");
+        error["code"] = code;
+        error["message"] = message;
+        doc["id"] = JsonVariant();
+        _isValid = true;
+        _isBatch = false;
+    }
+
+    String toString() const {
+        String output;
+        serializeJson(doc, output);
+        return output;
+    }
+
+    bool isValid() const { return _isValid; }
+    bool isBatch() const { return _isValid && _isBatch; }
+    bool isSuccess() const {
+        if (!_isValid || count() == 0) {
+            return false;
+        }
+
+        for (size_t i = 0; i < count(); ++i) {
+            if (hasError(i)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    size_t count() const {
+        if (!_isValid) {
+            return 0;
+        }
+
+        if (_isBatch) {
+            JsonArrayConst arr = doc.as<JsonArrayConst>();
+            return arr.size();
+        }
+
+        return 1;
+    }
+
+    JsonVariantConst response(size_t index) const {
+        return itemAt(index);
+    }
+
+    JsonVariantConst result(size_t index) const {
+        JsonVariantConst item = itemAt(index);
+        return item["result"];
+    }
+
+    bool hasError(size_t index) const {
+        JsonVariantConst item = itemAt(index);
+        return !item.isNull() && item.containsKey("error");
+    }
+
+    int errorCode(size_t index) const {
+        JsonVariantConst item = itemAt(index);
+        if (item.isNull() || !item.containsKey("error")) return 0;
+        return item["error"]["code"] | 0;
+    }
+
+    String errorMessage(size_t index) const {
+        JsonVariantConst item = itemAt(index);
+        if (item.isNull() || !item.containsKey("error")) return "";
+        return item["error"]["message"].as<String>();
+    }
+
+    JsonVariantConst id(size_t index) const {
+        JsonVariantConst item = itemAt(index);
+        return item["id"];
     }
 };
 
@@ -155,7 +299,7 @@ public:
     static String serializeString(const String& value) {
         return "S:" + value;
     }
-    
+
     /**
      * Serialize a date/timestamp with D: prefix (ISO 8601 format)
      * @param timestamp Unix timestamp in seconds
@@ -167,7 +311,7 @@ public:
         snprintf(buffer, sizeof(buffer), "D:%lu", timestamp);
         return String(buffer);
     }
-    
+
     /**
      * Serialize a large integer with 'n' suffix (BigInt equivalent)
      */
@@ -176,7 +320,7 @@ public:
         snprintf(buffer, sizeof(buffer), "%lldn", value);
         return String(buffer);
     }
-    
+
     /**
      * Deserialize a safe string (remove S: prefix)
      */
@@ -186,7 +330,7 @@ public:
         }
         return value;
     }
-    
+
     /**
      * Deserialize a safe date (remove D: prefix and parse)
      */
@@ -196,7 +340,7 @@ public:
         }
         return 0;
     }
-    
+
     /**
      * Deserialize a BigInt (remove 'n' suffix)
      */
@@ -207,21 +351,21 @@ public:
         }
         return 0;
     }
-    
+
     /**
      * Check if string is a safe string
      */
     static bool isSafeString(const String& value) {
         return value.startsWith("S:");
     }
-    
+
     /**
      * Check if string is a safe date
      */
     static bool isSafeDate(const String& value) {
         return value.startsWith("D:");
     }
-    
+
     /**
      * Check if string is a BigInt
      */
@@ -243,27 +387,27 @@ public:
         resp.setError(RPC_ERROR_PARSE, "Parse error", id);
         return resp;
     }
-    
+
     static RpcResponse invalidRequest(JsonVariant id) {
         RpcResponse resp;
         resp.setError(RPC_ERROR_INVALID_REQ, "Invalid Request", id);
         return resp;
     }
-    
+
     static RpcResponse methodNotFound(const char* method, JsonVariant id) {
         RpcResponse resp;
         String msg = "Method not found: ";
         msg += method;
-        resp.setError(RPC_ERROR_METHOD_NOT_FOUND, msg.c_str(), id);
+        resp.setError(RPC_ERROR_METHOD_NOT_FOUND, msg, id);
         return resp;
     }
-    
+
     static RpcResponse invalidParams(JsonVariant id) {
         RpcResponse resp;
         resp.setError(RPC_ERROR_INVALID_PARAMS, "Invalid params", id);
         return resp;
     }
-    
+
     static RpcResponse internalError(JsonVariant id) {
         RpcResponse resp;
         resp.setError(RPC_ERROR_INTERNAL, "Internal error", id);
