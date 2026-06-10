@@ -106,17 +106,6 @@ public:
     }
 
     /**
-     * Deserialize a BigInt (remove 'n' suffix)
-     */
-    static long long deserializeBigInt(const String& value) {
-        if (value.endsWith("n")) {
-            String numStr = value.substring(0, value.length() - 1);
-            return atoll(numStr.c_str());
-        }
-        return 0;
-    }
-
-    /**
      * Check if string is a safe string
      */
     static bool isSafeString(const String& value) {
@@ -131,12 +120,45 @@ public:
     }
 
     /**
-     * Check if string is a BigInt
+     * Check if string is a BigInt marker
      */
     static bool isBigInt(const String& value) {
-        return value.length() > 1 && value.endsWith("n");
+        if (value.length() < 2 || !value.endsWith("n")) {
+            return false;
+        }
+
+        size_t start = 0;
+        if (value[0] == '-') {
+            start = 1;
+            if (value.length() < 3) {
+                return false;
+            }
+        }
+
+        for (size_t i = start; i < value.length() - 1; ++i) {
+            if (!isDigit(value[i])) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
+    /**
+     * Deserialize a BigInt marker (remove 'n' suffix)
+     */
+    static long long deserializeBigInt(const String& value) {
+        if (isBigInt(value)) {
+            String numStr = value.substring(0, value.length() - 1);
+            return atoll(numStr.c_str());
+        }
+        return 0;
+    }
+
+    /**
+     * Check if a string already looks like explicit/manual Safe Mode helper output.
+     * Automatic recursive encoding does not use this because it is datatype-based.
+     */
     static bool isEncodedString(const String& value) {
         return isSafeString(value) || isSafeDate(value) || isBigInt(value);
     }
@@ -165,7 +187,7 @@ public:
 
         if (source.is<const char*>()) {
             String value = source.as<String>();
-            array.add(isEncodedString(value) ? value : serializeString(value));
+            array.add(serializeString(value));
             return;
         }
 
@@ -174,7 +196,7 @@ public:
 
     /**
      * Recursively encode JSON values using RPC Toolkit Safe Mode conventions.
-     * Strings are prefixed unless they already look like Safe Mode helper output.
+     * Encoding is source-datatype based: every JSON string gets an S: prefix.
      */
     static void encodeValue(JsonVariantConst source, JsonVariant target) {
         if (source.isNull()) {
@@ -200,7 +222,7 @@ public:
 
         if (source.is<const char*>()) {
             String value = source.as<String>();
-            target.set(isEncodedString(value) ? value : serializeString(value));
+            target.set(serializeString(value));
             return;
         }
 
@@ -300,6 +322,48 @@ public:
         _isValid = true;
     }
 
+    void setError(int code, const char* message, JsonVariantConst data, JsonVariant id, bool encodeSafe = false) {
+        doc.clear();
+        doc["jsonrpc"] = "2.0";
+        JsonObject error = doc.createNestedObject("error");
+        error["code"] = code;
+        error["message"] = message;
+        if (!data.isNull()) {
+#if RPC_ENABLE_SAFE_MODE
+            if (encodeSafe) {
+                RpcSafe::encodeValue(data, error["data"]);
+            } else
+#endif
+            {
+                error["data"] = data;
+            }
+        }
+        doc["id"] = id;
+        _hasError = true;
+        _isValid = true;
+    }
+
+    void setError(int code, const String& message, JsonVariantConst data, JsonVariant id, bool encodeSafe = false) {
+        doc.clear();
+        doc["jsonrpc"] = "2.0";
+        JsonObject error = doc.createNestedObject("error");
+        error["code"] = code;
+        error["message"] = message;
+        if (!data.isNull()) {
+#if RPC_ENABLE_SAFE_MODE
+            if (encodeSafe) {
+                RpcSafe::encodeValue(data, error["data"]);
+            } else
+#endif
+            {
+                error["data"] = data;
+            }
+        }
+        doc["id"] = id;
+        _hasError = true;
+        _isValid = true;
+    }
+
     // Parse from JSON string
     bool parse(const String& json) {
         return parse(json, false);
@@ -367,11 +431,19 @@ public:
         return doc["error"]["message"].as<String>();
     }
 
+    JsonVariantConst errorData() const {
+        if (!_hasError) return JsonVariantConst();
+        return doc["error"]["data"];
+    }
+
     // Get ID
     JsonVariantConst id() const {
         return doc["id"];
     }
 };
+
+// Handler that can return a complete JSON-RPC response, including errors.
+typedef std::function<RpcResponse(RpcRequest&, bool)> RpcResponseHandler;
 
 // ============================================================================
 // RPC Batch Response
@@ -578,6 +650,18 @@ public:
     static RpcResponse internalError(JsonVariant id) {
         RpcResponse resp;
         resp.setError(RPC_ERROR_INTERNAL, "Internal error", id);
+        return resp;
+    }
+
+    static RpcResponse custom(int code, const char* message, JsonVariantConst data, JsonVariant id, bool encodeSafe = false) {
+        RpcResponse resp;
+        resp.setError(code, message, data, id, encodeSafe);
+        return resp;
+    }
+
+    static RpcResponse custom(int code, const String& message, JsonVariantConst data, JsonVariant id, bool encodeSafe = false) {
+        RpcResponse resp;
+        resp.setError(code, message, data, id, encodeSafe);
         return resp;
     }
 };

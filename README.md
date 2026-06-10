@@ -88,6 +88,27 @@ lib_deps =
 
 The PlatformIO Registry name will be used only after the library is officially published there.
 
+### Selective Includes
+
+For Arduino sketches, prefer including only the client, server, and transport headers you actually use. This keeps compile units smaller on constrained boards.
+
+```cpp
+// HTTP server
+#include <RpcServer.h>
+#include <RpcHttpServerTransport.h>
+
+// HTTP client
+#include <RpcClient.h>
+#include <RpcHttpClientTransport.h>
+
+// Serial client/server
+#include <RpcClient.h>
+#include <RpcServer.h>
+#include <RpcSerialTransport.h>
+```
+
+`RpcArduinoToolkit.h` remains available as a convenience umbrella header, but examples use selective includes by default.
+
 ## Quick Start
 
 ### Server Example (ESP32 - WiFi)
@@ -296,6 +317,34 @@ if (resp.hasError()) {
 }
 ```
 
+Server handlers registered with `addMethod(...)` return successful JSON-RPC
+`result` values. Use `addResponseMethod(...)` when a method needs to return a
+complete JSON-RPC response, such as a custom error with `error.data`:
+
+```cpp
+StaticJsonDocument<256> errorDataDoc;
+
+rpc.addResponseMethod("domainError",
+    [](RpcRequest& req, bool encodeSafe) -> RpcResponse {
+        errorDataDoc.clear();
+        JsonObject data = errorDataDoc.to<JsonObject>();
+        data["reason"] = "intentional-test-error";
+        data["markerString"] = "S:error-data-literal";
+
+        return RpcError::custom(
+            -32042,
+            "Domain failure",
+            data,
+            req.id,
+            encodeSafe);
+    },
+    "Throw a domain JSON-RPC error",
+    true);
+```
+
+When Safe Mode is enabled, `RpcError::custom(...)` encodes `error.data`
+recursively when `encodeSafe` is `true`.
+
 ### Built-in Introspection Methods
 
 The RPC server includes built-in introspection methods for API discovery (memory-optimized for embedded platforms):
@@ -444,7 +493,7 @@ Safe Mode is an optional RPC Toolkit extension for preserving application-level 
 
 JSON-RPC 2.0 remains the default wire format. When Safe Mode is disabled, values are sent as plain JSON values without RPC Toolkit type prefixes.
 
-Safe Mode helper utilities are available for explicit string/date/bigint values. When Safe Mode is enabled, HTTP client/server transports also encode and decode params/results recursively using the negotiated Safe Mode header.
+Safe Mode helper utilities are available for explicit string/date/bigint marker handling. When Safe Mode is enabled, HTTP client/server transports also encode and decode params/results recursively using the negotiated Safe Mode header.
 
 `rpc-arduino-toolkit` is interoperable with standard JSON-RPC 2.0 clients and servers by default. When `RPC_ENABLE_SAFE_MODE=1`, HTTP transports use the same Safe Mode conventions as `rpc-express-toolkit`, including `X-RPC-Safe-Enabled` negotiation and recursive params/result encode/decode.
 
@@ -486,6 +535,8 @@ bool isBigInt = RpcSafe::isBigInt("123n");       // true
 - Helps preserve type intent when both endpoints use the same conventions
 - Disabled by default (enable with `RPC_ENABLE_SAFE_MODE=1`)
 
+Helper output is for explicit/manual marker handling. If helper output such as `"D:1234567890"` or `"9999999n"` is placed into a normal ArduinoJson string and then passed through automatic Safe Mode encoding, it is still treated as a string and encoded with `S:`.
+
 ### Standard JSON-RPC Mode
 
 Safe Mode is off by default. Standard requests and responses stay plain JSON-RPC 2.0:
@@ -508,21 +559,25 @@ X-RPC-Safe-Enabled: true
 
 When `RPC_ENABLE_SAFE_MODE=0`, HTTP transports still send the header with `false`.
 
-Safe Mode encoding examples:
+Automatic Safe Mode encoding is source-datatype based. Every ArduinoJson string is encoded as a Safe Mode string with `S:`, even when the string already looks like a Safe Mode marker:
 
 ```json
 {
   "message": "S:hello",
-  "timestamp": "D:1234567890",
-  "largeCounter": "9007199254740992n"
+  "literalSafePrefix": "S:S:literal",
+  "literalDatePrefix": "S:D:literal",
+  "isoDateString": "S:2026-06-10T12:34:56.000Z",
+  "literalBigIntMarker": "S:9007199254740992n"
 }
 ```
+
+`D:<value>` and `<digits>n` are decoded as Date/BigInt markers from peers. ArduinoJson does not expose native JavaScript `Date` or `BigInt` values, so generic decoded `D:` values and BigInt markers are kept as strings unless the sketch explicitly calls helpers such as `RpcSafe::deserializeDate()` or `RpcSafe::deserializeBigInt()`.
 
 HTTP Safe Mode behavior:
 - `RpcHttpClientTransport` sends `X-RPC-Safe-Enabled` and records the server response header.
 - `RpcHttpServerTransport` records the client header and includes its local Safe Mode state in responses.
 - `RpcServer` recursively decodes `params` when the incoming HTTP header is `true`.
-- `RpcServer` recursively encodes response `result` values when `RPC_ENABLE_SAFE_MODE=1`.
+- `RpcServer` recursively encodes response `result` and `error.data` values when `RPC_ENABLE_SAFE_MODE=1`.
 - `RpcClient` recursively decodes response `result` and `error.data` when the response header is `true`.
 - If `RPC_ENABLE_SAFE_MODE=1` and `RPC_SAFE_STRICT_MODE=1`, HTTP server requests without `X-RPC-Safe-Enabled` are rejected with JSON-RPC error `-32600`.
 - Serial and other non-HTTP transports can use Safe Mode helper encoding/decoding, but they do not support HTTP header negotiation and do not require Safe Mode headers.
@@ -635,6 +690,7 @@ See the `examples/` folder for complete working examples:
 - **WiFiServer** - ESP32 HTTP RPC server
 - **Introspection** - Demonstrates __rpc.* methods and description metadata
 - **SafeMode** - Optional Safe Mode helper utilities and value-prefix conventions
+- **SafeModeInteropTest** - Focused Safe Mode marker-like string round-trip checks
 
 ## API Reference
 
@@ -649,9 +705,12 @@ public:
     bool addMethod(const char* name, RpcMethodHandler handler, const char* description, bool exposeSchema = false);
     bool addMethod(const char* name, RpcSimpleHandler handler);
     bool addMethod(const char* name, RpcSimpleHandler handler, const char* description, bool exposeSchema = false);
+    bool addResponseMethod(const char* name, RpcResponseHandler handler);
+    bool addResponseMethod(const char* name, RpcResponseHandler handler, const char* description, bool exposeSchema = false);
 
     // Handler signature
     // JsonVariant handler(JsonVariantConst params);
+    // RpcResponse responseHandler(RpcRequest& req, bool encodeSafe);
 
     // Handle incoming request
     String handleRequest(RpcTransport& transport);
@@ -746,6 +805,17 @@ public:
     // Get error
     int errorCode() const;
     String errorMessage() const;
+    JsonVariantConst errorData() const;
+};
+```
+
+### RpcError
+
+```cpp
+class RpcError {
+public:
+    static RpcResponse custom(int code, const char* message, JsonVariantConst data, JsonVariant id, bool encodeSafe = false);
+    static RpcResponse custom(int code, const String& message, JsonVariantConst data, JsonVariant id, bool encodeSafe = false);
 };
 ```
 
@@ -791,6 +861,7 @@ pio test -e native
 - [x] RPC Toolkit Safe Mode HTTP header negotiation
 - [x] Recursive Safe Mode encode/decode for params and results
 - [x] Safe Mode interoperability test plan
+- [x] Focused Safe Mode marker-like string round-trip test sketch
 - [x] Basic examples for Serial, WiFi, introspection, and Safe Mode
 - [ ] Physical ESP32/ESP8266 Safe Mode interoperability validation
 - [ ] Finalize public API before official release

@@ -20,6 +20,8 @@ private:
     struct Method {
         char name[RPC_MAX_METHOD_NAME];
         RpcMethodHandler handler;
+        RpcResponseHandler responseHandler;
+        bool returnsResponse;
         bool active;
 #if RPC_ENABLE_SCHEMA_SUPPORT
         char description[RPC_MAX_DESCRIPTION];
@@ -163,10 +165,14 @@ private:
 
         // Execute handler
         try {
-            JsonVariant result = method->handler(req.params);
-            RpcResponse resp;
-            resp.setResult(result, req.id, encodeSafe);
-            return resp;
+            if (method->returnsResponse) {
+                return method->responseHandler(req, encodeSafe);
+            } else {
+                JsonVariant result = method->handler(req.params);
+                RpcResponse resp;
+                resp.setResult(result, req.id, encodeSafe);
+                return resp;
+            }
         } catch (...) {
             return RpcError::internalError(req.id);
         }
@@ -319,6 +325,7 @@ public:
     RpcServer() : methodCount(0) {
         for (uint8_t i = 0; i < MAX_METHODS; i++) {
             methods[i].active = false;
+            methods[i].returnsResponse = false;
 #if RPC_ENABLE_SCHEMA_SUPPORT
             methods[i].description[0] = '\0';
             methods[i].exposeSchema = false;
@@ -365,6 +372,8 @@ public:
                 strncpy(methods[i].name, name, RPC_MAX_METHOD_NAME - 1);
                 methods[i].name[RPC_MAX_METHOD_NAME - 1] = '\0';
                 methods[i].handler = handler;
+                methods[i].responseHandler = nullptr;
+                methods[i].returnsResponse = false;
                 methods[i].active = true;
 #if RPC_ENABLE_SCHEMA_SUPPORT
                 strncpy(methods[i].description, description, RPC_MAX_DESCRIPTION - 1);
@@ -377,6 +386,55 @@ public:
                 methodCount++;
 
                 RPC_LOG_F("Method registered: %s", name);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Register a method that returns a complete JSON-RPC response.
+     * Use this for custom errors with error.data or other advanced responses.
+     */
+    bool addResponseMethod(const char* name, RpcResponseHandler handler) {
+        return addResponseMethod(name, handler, "", false);
+    }
+
+#if RPC_ENABLE_SCHEMA_SUPPORT
+    bool addResponseMethod(const char* name, RpcResponseHandler handler, const char* description, bool exposeSchema = false) {
+#else
+    bool addResponseMethod(const char* name, RpcResponseHandler handler, const char* description = "", bool exposeSchema = false) {
+#endif
+        if (methodCount >= MAX_METHODS) {
+            RPC_LOG("Max methods reached!");
+            return false;
+        }
+
+        if (strlen(name) >= RPC_MAX_METHOD_NAME) {
+            RPC_LOG("Method name too long!");
+            return false;
+        }
+
+        for (uint8_t i = 0; i < MAX_METHODS; i++) {
+            if (!methods[i].active) {
+                strncpy(methods[i].name, name, RPC_MAX_METHOD_NAME - 1);
+                methods[i].name[RPC_MAX_METHOD_NAME - 1] = '\0';
+                methods[i].handler = nullptr;
+                methods[i].responseHandler = handler;
+                methods[i].returnsResponse = true;
+                methods[i].active = true;
+#if RPC_ENABLE_SCHEMA_SUPPORT
+                strncpy(methods[i].description, description, RPC_MAX_DESCRIPTION - 1);
+                methods[i].description[RPC_MAX_DESCRIPTION - 1] = '\0';
+                methods[i].exposeSchema = exposeSchema;
+#else
+                (void)description;
+                (void)exposeSchema;
+#endif
+                methodCount++;
+
+                RPC_LOG_F("Response method registered: %s", name);
                 return true;
             }
         }
@@ -411,6 +469,9 @@ public:
         for (uint8_t i = 0; i < MAX_METHODS; i++) {
             if (methods[i].active && strcmp(methods[i].name, name) == 0) {
                 methods[i].active = false;
+                methods[i].handler = nullptr;
+                methods[i].responseHandler = nullptr;
+                methods[i].returnsResponse = false;
                 methodCount--;
                 RPC_LOG_F("Method removed: %s", name);
                 return true;

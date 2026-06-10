@@ -2,6 +2,8 @@
 
 This directory contains example sketches demonstrating the RPC Arduino Toolkit.
 
+Examples intentionally use selective includes instead of `RpcArduinoToolkit.h` so sketches only pull the client, server, and transport pieces they use.
+
 ## Available Examples
 
 ### BasicServer
@@ -43,6 +45,9 @@ Demonstrates built-in `__rpc.*` methods, including method listing, version metad
 
 ### SafeMode
 Demonstrates optional RPC Toolkit Safe Mode helper utilities and value-prefix conventions. HTTP transports perform Safe Mode header negotiation when `RPC_ENABLE_SAFE_MODE=1`; Serial examples do not require headers.
+
+### SafeModeInteropTest
+Focused compile/runtime sketch for automatic Safe Mode source-datatype encoding. It verifies that normal strings starting with `S:`, `D:`, or ending with `n` are protected by the `S:` string prefix and round-trip as strings.
 
 For HTTP interoperability testing against `rpc-express-toolkit` Safe Mode, see `../docs/SAFE_MODE_INTEROPERABILITY_TEST_PLAN.md`.
 

@@ -1,7 +1,12 @@
 /**
  * RPC Arduino Toolkit - Main Header
  * 
- * Include this file to use the RPC library
+ * Convenience umbrella header.
+ *
+ * Prefer including only the headers required by a sketch, such as
+ * RpcClient.h plus a transport for clients or RpcServer.h plus a transport
+ * for servers. Include this file only when a sketch intentionally wants the
+ * full toolkit surface.
  */
 
 #ifndef RPC_ARDUINO_TOOLKIT_H

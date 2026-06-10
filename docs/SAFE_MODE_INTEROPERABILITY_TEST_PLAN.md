@@ -28,9 +28,11 @@ Not covered in this pass:
 - `RpcHttpClientTransport` sends the header and records the server response header.
 - `RpcHttpServerTransport` reads the client header and sends its local Safe Mode state in the response header.
 - With `RPC_ENABLE_SAFE_MODE=1` and `RPC_SAFE_STRICT_MODE=1`, HTTP server requests without `X-RPC-Safe-Enabled` must return JSON-RPC error `-32600`, except notifications, which must not return a body.
+- Automatic Safe Mode encoding is source-datatype based. Every ArduinoJson string is encoded with `S:`, including strings that already start with `S:`, start with `D:`, or end with `n`.
 - Serial transport can use Safe Mode helper encoding/decoding, but it does not support HTTP header negotiation and must not require Safe Mode headers.
 - Arduino keeps BigInt marker values as strings such as `"9007199254740993n"`. It does not expose JavaScript `BigInt` semantics.
 - Arduino keeps decoded `D:` values as strings in generic JSON results/params. Date helper APIs may parse timestamp strings explicitly when sketches call them.
+- Helper output such as `RpcSafe::serializeDate()` is treated as a normal string if inserted into ArduinoJson and passed through automatic Safe Mode encoding.
 
 ## Reference Test Setup
 
@@ -119,7 +121,7 @@ Expose at least these methods:
 - `ping`
 - `echo`
 - `types`
-- `domainError`
+- `domainError` through `addResponseMethod`, returning JSON-RPC error `-32042` with `error.data`
 - `notify.record`
 - `notify.stats`
 
@@ -129,17 +131,17 @@ Expose at least these methods:
 | --- | --- | --- | --- | --- |
 | SM-01 | Arduino HTTP client -> Node `RpcSafeEndpoint` | `ping` with no params | Result is `pong`; request and response include Safe Mode header | Manual physical test required |
 | SM-02 | Arduino HTTP client -> Node `RpcSafeEndpoint` | Recursive object/array params through `echo` | Nested strings decode without `S:` prefix; arrays/objects preserve shape | Manual physical test required |
-| SM-03 | Arduino HTTP client -> Node `RpcSafeEndpoint` | Strings beginning with `S:` and `D:` | Literal prefixes round-trip as string values | Manual physical test required |
+| SM-03 | Arduino HTTP client -> Node `RpcSafeEndpoint` | Strings beginning with `S:` and `D:` | Literal prefixes are sent as `S:S:...` and `S:D:...` on the wire and round-trip as string values | Manual physical test required |
 | SM-04 | Arduino HTTP client -> Node `RpcSafeEndpoint` | ISO date string param | Value remains an ISO string on Arduino; Node may hydrate Date only for `D:` markers | Manual physical test required |
-| SM-05 | Arduino HTTP client -> Node `RpcSafeEndpoint` | BigInt marker string ending in `n` | Arduino treats marker as string; Node Safe Mode may hydrate it to JavaScript `BigInt` | Manual physical test required |
+| SM-05 | Arduino HTTP client -> Node `RpcSafeEndpoint` | BigInt-looking string ending in `n` | Literal string is sent as `S:9007199254740993n` and round-trips as a string, not JavaScript `BigInt` | Manual physical test required |
 | SM-06 | Arduino HTTP client -> Node `RpcSafeEndpoint` | JSON-RPC error with `error.data` | Arduino receives error code/message and decoded nested `error.data` | Manual physical test required |
 | SM-07 | Arduino HTTP client -> Node `RpcSafeEndpoint` | Batch with success, domain error, and method-not-found | `RpcBatchResponse` exposes each item in order; error items keep code/message/data | Manual physical test required |
 | SM-08 | Arduino HTTP client -> Node `RpcSafeEndpoint` | Notification `notify.record` | No response body is required; follow-up `notify.stats` confirms execution | Manual physical test required |
 | SM-09 | Node `RpcSafeClient` -> Arduino HTTP server | `ping` with no params | Result is `pong`; request and response include Safe Mode header | Manual physical test required |
 | SM-10 | Node `RpcSafeClient` -> Arduino HTTP server | Recursive object/array params through `echo` | Arduino decodes params recursively; Node receives recursively encoded result | Manual physical test required |
-| SM-11 | Node `RpcSafeClient` -> Arduino HTTP server | Strings beginning with `S:` and `D:` | Literal prefixes round-trip as string values | Manual physical test required |
+| SM-11 | Node `RpcSafeClient` -> Arduino HTTP server | Strings beginning with `S:` and `D:` | Literal prefixes arrive as string values after one `S:` layer is decoded | Manual physical test required |
 | SM-12 | Node `RpcSafeClient` -> Arduino HTTP server | ISO date string param | Arduino sees a string; it does not create a Date object | Manual physical test required |
-| SM-13 | Node `RpcSafeClient` -> Arduino HTTP server | BigInt marker value | Arduino stores marker as a string; Node client may hydrate marker results to `BigInt` | Manual physical test required |
+| SM-13 | Node `RpcSafeClient` -> Arduino HTTP server | BigInt value and BigInt-looking string | Arduino stores both as strings in generic JSON; literal BigInt-looking strings must remain strings when echoed | Manual physical test required |
 | SM-14 | Node `RpcSafeClient` -> Arduino HTTP server | JSON-RPC error with `error.data` | Node receives decoded `error.data` from Arduino response | Manual physical test required |
 | SM-15 | Node `RpcSafeClient` -> Arduino HTTP server | Batch with success, error, and notification | Response includes only calls with ids; notification executes without response entry | Manual physical test required |
 | SM-16 | Node standard `RpcClient` -> Safe Mode server | `safe=false` client with header `false` | Server accepts request because header is present; response header is `true` | Manual physical test required |
@@ -248,9 +250,19 @@ Expected Arduino-side interpretation:
 - Arduino does not expose JavaScript `Date` or `BigInt` values.
 
 Expected Node-side interpretation:
-- `RpcSafeClient` may hydrate valid `D:` markers to `Date`.
-- `RpcSafeClient` may hydrate valid `n` markers to JavaScript `BigInt`.
 - Literal strings beginning with `S:` or `D:` must still round-trip as strings when they were originally strings.
+- Literal strings ending with `n`, such as `"9007199254740993n"`, must still round-trip as strings when they were originally strings.
+- `RpcSafeClient` may hydrate actual `D:` markers to `Date` and actual `n` markers to JavaScript `BigInt` only when those markers came from typed Date/BigInt values or explicit marker output, not from literal strings protected by `S:`.
+
+Expected Arduino automatic wire encoding for literal strings:
+
+| Source string | Safe Mode wire value |
+| --- | --- |
+| `"hello"` | `"S:hello"` |
+| `"S:literal"` | `"S:S:literal"` |
+| `"D:literal"` | `"S:D:literal"` |
+| `"2026-06-10T12:34:56.000Z"` | `"S:2026-06-10T12:34:56.000Z"` |
+| `"9007199254740993n"` | `"S:9007199254740993n"` |
 
 ## Error Data Case
 
@@ -283,4 +295,4 @@ Before claiming full Safe Mode interoperability in the public release:
 - Run the full matrix on ESP32.
 - Run at least HTTP client and HTTP server smoke tests on ESP8266.
 - Capture firmware commit, `rpc-express-toolkit` version/commit, board model, Arduino core/platform version, and pass/fail summary.
-- Record any remaining prefix ambiguity around manually pre-encoded Arduino strings versus automatic HTTP Safe Mode encoding.
+- Confirm marker-like literal strings pass both Arduino-client-to-Node and Node-client-to-Arduino echo tests.
