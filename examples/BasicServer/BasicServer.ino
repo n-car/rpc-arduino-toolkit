@@ -1,13 +1,13 @@
 /**
  * Basic RPC Server Example - Serial
- * 
+ *
  * This example creates a simple RPC server that communicates over Serial.
  * You can control an LED and read analog values.
- * 
+ *
  * Hardware:
  * - Arduino Uno/Mega/Nano or compatible
  * - LED on pin 13 (or use built-in LED)
- * 
+ *
  * Usage:
  * 1. Upload this sketch
  * 2. Open Serial Monitor at 115200 baud
@@ -25,41 +25,41 @@ RpcServer<4> rpc;
 void setup() {
     Serial.begin(115200);
     while (!Serial) delay(10);
-    
+
     Serial.println("RPC Server Starting...");
-    
+
     // Setup LED pin
     pinMode(LED_BUILTIN, OUTPUT);
-    
+
     // Register LED control method
-    rpc.addMethod("setLED", [](JsonObject params) -> JsonVariant {
+    rpc.addMethod("setLED", [](JsonVariantConst params) -> JsonVariant {
         bool state = params["state"] | false;
         digitalWrite(LED_BUILTIN, state ? HIGH : LOW);
-        
+
         Serial.print("LED ");
         Serial.println(state ? "ON" : "OFF");
-        
+
         return state;
     });
-    
+
     // Register analog read method
-    rpc.addMethod("readAnalog", [](JsonObject params) -> JsonVariant {
+    rpc.addMethod("readAnalog", [](JsonVariantConst params) -> JsonVariant {
         int pin = params["pin"] | 0;
         int value = analogRead(pin);
-        
+
         Serial.print("Analog pin ");
         Serial.print(pin);
         Serial.print(": ");
         Serial.println(value);
-        
+
         return value;
     });
-    
+
     // Register ping method
     rpc.addMethod("ping", []() -> JsonVariant {
         return "pong";
     });
-    
+
     // Register getStatus method
     rpc.addMethod("getStatus", []() -> JsonVariant {
         StaticJsonDocument<128> doc;
@@ -67,7 +67,7 @@ void setup() {
         doc["freeMem"] = freeMemory();
         return doc.as<JsonVariant>();
     });
-    
+
     Serial.println("RPC Server Ready!");
     Serial.println("Registered methods:");
     Serial.println("  - setLED");
@@ -82,7 +82,7 @@ void loop() {
     if (Serial.available()) {
         RpcSerialTransport transport(Serial);
         String response = rpc.handleRequest(transport);
-        
+
         // Send response if not a notification
         if (!response.isEmpty()) {
             Serial.println(response);
