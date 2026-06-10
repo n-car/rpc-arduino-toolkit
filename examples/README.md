@@ -38,6 +38,14 @@ HTTP-based RPC server with WiFi. Demonstrates:
 ### HTTP Client
 Use `RpcHttpClientTransport` with `WiFiClient`, `EthernetClient`, or another Arduino `Client` implementation to call remote JSON-RPC HTTP endpoints.
 
+### Introspection
+Demonstrates built-in `__rpc.*` methods, including method listing, version metadata, description metadata, and capabilities.
+
+### SafeMode
+Demonstrates optional RPC Toolkit Safe Mode helper utilities and value-prefix conventions. HTTP transports perform Safe Mode header negotiation when `RPC_ENABLE_SAFE_MODE=1`; Serial examples do not require headers.
+
+For HTTP interoperability testing against `rpc-express-toolkit` Safe Mode, see `../docs/SAFE_MODE_INTEROPERABILITY_TEST_PLAN.md`.
+
 ## Running Examples
 
 ### Arduino IDE

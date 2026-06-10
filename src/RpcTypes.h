@@ -52,6 +52,198 @@ public:
 };
 
 // ============================================================================
+// Safe Serialization Helpers (if RPC_ENABLE_SAFE_MODE)
+// ============================================================================
+
+#if RPC_ENABLE_SAFE_MODE
+
+class RpcSafe {
+public:
+    /**
+     * Serialize a string with S: prefix for safe mode
+     */
+    static String serializeString(const String& value) {
+        return "S:" + value;
+    }
+
+    /**
+     * Serialize a date/timestamp with D: prefix (ISO 8601 or timestamp string)
+     * @param timestamp Unix timestamp in seconds
+     */
+    static String serializeDate(unsigned long timestamp) {
+        char buffer[32];
+        snprintf(buffer, sizeof(buffer), "D:%lu", timestamp);
+        return String(buffer);
+    }
+
+    /**
+     * Serialize a large integer with 'n' suffix (BigInt equivalent)
+     */
+    static String serializeBigInt(long long value) {
+        char buffer[32];
+        snprintf(buffer, sizeof(buffer), "%lldn", value);
+        return String(buffer);
+    }
+
+    /**
+     * Deserialize a safe string (remove S: prefix)
+     */
+    static String deserializeString(const String& value) {
+        if (value.startsWith("S:")) {
+            return value.substring(2);
+        }
+        return value;
+    }
+
+    /**
+     * Deserialize a safe date (remove D: prefix and parse)
+     */
+    static unsigned long deserializeDate(const String& value) {
+        if (value.startsWith("D:")) {
+            return value.substring(2).toInt();
+        }
+        return 0;
+    }
+
+    /**
+     * Deserialize a BigInt (remove 'n' suffix)
+     */
+    static long long deserializeBigInt(const String& value) {
+        if (value.endsWith("n")) {
+            String numStr = value.substring(0, value.length() - 1);
+            return atoll(numStr.c_str());
+        }
+        return 0;
+    }
+
+    /**
+     * Check if string is a safe string
+     */
+    static bool isSafeString(const String& value) {
+        return value.startsWith("S:");
+    }
+
+    /**
+     * Check if string is a safe date
+     */
+    static bool isSafeDate(const String& value) {
+        return value.startsWith("D:");
+    }
+
+    /**
+     * Check if string is a BigInt
+     */
+    static bool isBigInt(const String& value) {
+        return value.length() > 1 && value.endsWith("n");
+    }
+
+    static bool isEncodedString(const String& value) {
+        return isSafeString(value) || isSafeDate(value) || isBigInt(value);
+    }
+
+    static void encodeArrayElement(JsonVariantConst source, JsonArray array) {
+        if (source.isNull()) {
+            array.add(nullptr);
+            return;
+        }
+
+        if (source.is<JsonObjectConst>()) {
+            JsonObject object = array.createNestedObject();
+            for (JsonPairConst pair : source.as<JsonObjectConst>()) {
+                encodeValue(pair.value(), object[pair.key().c_str()]);
+            }
+            return;
+        }
+
+        if (source.is<JsonArrayConst>()) {
+            JsonArray nestedArray = array.createNestedArray();
+            for (JsonVariantConst item : source.as<JsonArrayConst>()) {
+                encodeArrayElement(item, nestedArray);
+            }
+            return;
+        }
+
+        if (source.is<const char*>()) {
+            String value = source.as<String>();
+            array.add(isEncodedString(value) ? value : serializeString(value));
+            return;
+        }
+
+        array.add(source);
+    }
+
+    /**
+     * Recursively encode JSON values using RPC Toolkit Safe Mode conventions.
+     * Strings are prefixed unless they already look like Safe Mode helper output.
+     */
+    static void encodeValue(JsonVariantConst source, JsonVariant target) {
+        if (source.isNull()) {
+            target.set(nullptr);
+            return;
+        }
+
+        if (source.is<JsonObjectConst>()) {
+            JsonObject object = target.to<JsonObject>();
+            for (JsonPairConst pair : source.as<JsonObjectConst>()) {
+                encodeValue(pair.value(), object[pair.key().c_str()]);
+            }
+            return;
+        }
+
+        if (source.is<JsonArrayConst>()) {
+            JsonArray array = target.to<JsonArray>();
+            for (JsonVariantConst item : source.as<JsonArrayConst>()) {
+                encodeArrayElement(item, array);
+            }
+            return;
+        }
+
+        if (source.is<const char*>()) {
+            String value = source.as<String>();
+            target.set(isEncodedString(value) ? value : serializeString(value));
+            return;
+        }
+
+        target.set(source);
+    }
+
+    /**
+     * Recursively decode JSON values that came from a Safe Mode peer.
+     * D: and BigInt values are kept as strings in generic JSON to avoid overflow.
+     */
+    static void decodeInPlace(JsonVariant value) {
+        if (value.isNull()) {
+            return;
+        }
+
+        if (value.is<JsonObject>()) {
+            for (JsonPair pair : value.as<JsonObject>()) {
+                decodeInPlace(pair.value());
+            }
+            return;
+        }
+
+        if (value.is<JsonArray>()) {
+            for (JsonVariant item : value.as<JsonArray>()) {
+                decodeInPlace(item);
+            }
+            return;
+        }
+
+        if (value.is<const char*>()) {
+            String text = value.as<String>();
+            if (isSafeString(text) || isSafeDate(text)) {
+                value.set(text.substring(2));
+            } else if (isBigInt(text)) {
+                value.set(text);
+            }
+        }
+    }
+};
+
+#endif // RPC_ENABLE_SAFE_MODE
+
+// ============================================================================
 // RPC Response
 // ============================================================================
 
@@ -66,9 +258,20 @@ public:
 
     // Success response
     void setResult(JsonVariant result, JsonVariant id) {
+        setResult(result, id, false);
+    }
+
+    void setResult(JsonVariant result, JsonVariant id, bool encodeSafe) {
         doc.clear();
         doc["jsonrpc"] = "2.0";
-        doc["result"] = result;
+#if RPC_ENABLE_SAFE_MODE
+        if (encodeSafe) {
+            RpcSafe::encodeValue(result.as<JsonVariantConst>(), doc["result"]);
+        } else
+#endif
+        {
+            doc["result"] = result;
+        }
         doc["id"] = id;
         _hasError = false;
         _isValid = true;
@@ -99,12 +302,29 @@ public:
 
     // Parse from JSON string
     bool parse(const String& json) {
+        return parse(json, false);
+    }
+
+    bool parse(const String& json, bool decodeSafe) {
         DeserializationError error = deserializeJson(doc, json);
         if (error) {
             RPC_LOG_F("Failed to parse response: %s", error.c_str());
             _isValid = false;
             return false;
         }
+
+#if RPC_ENABLE_SAFE_MODE
+        if (decodeSafe) {
+            if (doc.containsKey("result")) {
+                RpcSafe::decodeInPlace(doc["result"]);
+            }
+            if (doc.containsKey("error") && doc["error"].containsKey("data")) {
+                RpcSafe::decodeInPlace(doc["error"]["data"]);
+            }
+        }
+#else
+        (void)decodeSafe;
+#endif
 
         _hasError = doc.containsKey("error");
         _isValid = doc["jsonrpc"] == "2.0";
@@ -182,6 +402,10 @@ public:
     // Parse from JSON string. Valid batch responses are arrays; a single
     // JSON-RPC error object is accepted for invalid batch requests.
     bool parse(const String& json) {
+        return parse(json, false);
+    }
+
+    bool parse(const String& json, bool decodeSafe) {
         DeserializationError error = deserializeJson(doc, json);
         if (error) {
             RPC_LOG_F("Failed to parse batch response: %s", error.c_str());
@@ -189,6 +413,30 @@ public:
             _isBatch = false;
             return false;
         }
+
+#if RPC_ENABLE_SAFE_MODE
+        if (decodeSafe) {
+            if (doc.is<JsonArray>()) {
+                for (JsonVariant item : doc.as<JsonArray>()) {
+                    if (item.containsKey("result")) {
+                        RpcSafe::decodeInPlace(item["result"]);
+                    }
+                    if (item.containsKey("error") && item["error"].containsKey("data")) {
+                        RpcSafe::decodeInPlace(item["error"]["data"]);
+                    }
+                }
+            } else {
+                if (doc.containsKey("result")) {
+                    RpcSafe::decodeInPlace(doc["result"]);
+                }
+                if (doc.containsKey("error") && doc["error"].containsKey("data")) {
+                    RpcSafe::decodeInPlace(doc["error"]["data"]);
+                }
+            }
+        }
+#else
+        (void)decodeSafe;
+#endif
 
         if (doc.is<JsonArray>()) {
             _isValid = true;
@@ -286,97 +534,6 @@ public:
 };
 
 // ============================================================================
-// Safe Serialization Helpers (if RPC_ENABLE_SAFE_MODE)
-// ============================================================================
-
-#if RPC_ENABLE_SAFE_MODE
-
-class RpcSafe {
-public:
-    /**
-     * Serialize a string with S: prefix for safe mode
-     */
-    static String serializeString(const String& value) {
-        return "S:" + value;
-    }
-
-    /**
-     * Serialize a date/timestamp with D: prefix (ISO 8601 format)
-     * @param timestamp Unix timestamp in seconds
-     */
-    static String serializeDate(unsigned long timestamp) {
-        // Simple ISO 8601 formatting (without timezone conversion)
-        // Arduino typically works with Unix timestamps
-        char buffer[32];
-        snprintf(buffer, sizeof(buffer), "D:%lu", timestamp);
-        return String(buffer);
-    }
-
-    /**
-     * Serialize a large integer with 'n' suffix (BigInt equivalent)
-     */
-    static String serializeBigInt(long long value) {
-        char buffer[32];
-        snprintf(buffer, sizeof(buffer), "%lldn", value);
-        return String(buffer);
-    }
-
-    /**
-     * Deserialize a safe string (remove S: prefix)
-     */
-    static String deserializeString(const String& value) {
-        if (value.startsWith("S:")) {
-            return value.substring(2);
-        }
-        return value;
-    }
-
-    /**
-     * Deserialize a safe date (remove D: prefix and parse)
-     */
-    static unsigned long deserializeDate(const String& value) {
-        if (value.startsWith("D:")) {
-            return value.substring(2).toInt();
-        }
-        return 0;
-    }
-
-    /**
-     * Deserialize a BigInt (remove 'n' suffix)
-     */
-    static long long deserializeBigInt(const String& value) {
-        if (value.endsWith("n")) {
-            String numStr = value.substring(0, value.length() - 1);
-            return numStr.toInt();  // Note: Arduino long is 32-bit, limited range
-        }
-        return 0;
-    }
-
-    /**
-     * Check if string is a safe string
-     */
-    static bool isSafeString(const String& value) {
-        return value.startsWith("S:");
-    }
-
-    /**
-     * Check if string is a safe date
-     */
-    static bool isSafeDate(const String& value) {
-        return value.startsWith("D:");
-    }
-
-    /**
-     * Check if string is a BigInt
-     */
-    static bool isBigInt(const String& value) {
-        return value.endsWith("n");
-    }
-};
-
-#endif // RPC_ENABLE_SAFE_MODE
-
-// ============================================================================
 // RPC Error Helper
 // ============================================================================
 
@@ -391,6 +548,16 @@ public:
     static RpcResponse invalidRequest(JsonVariant id) {
         RpcResponse resp;
         resp.setError(RPC_ERROR_INVALID_REQ, "Invalid Request", id);
+        return resp;
+    }
+
+    static RpcResponse compatibilityError(JsonVariant id) {
+        RpcResponse resp;
+        resp.setError(
+            RPC_ERROR_INVALID_REQ,
+            "RPC Compatibility Error: Server requires safe serialization header but client did not provide it.",
+            id
+        );
         return resp;
     }
 

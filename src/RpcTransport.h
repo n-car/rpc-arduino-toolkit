@@ -44,6 +44,16 @@ public:
     virtual void setTimeout(unsigned long ms) {
         timeout = ms;
     }
+
+    /**
+     * Transport capability hooks used by optional protocol extensions.
+     * Non-HTTP transports keep these defaults and never require Safe headers.
+     */
+    virtual bool isHttp() const { return false; }
+    virtual bool hasClientSafeHeader() const { return false; }
+    virtual bool clientSafeEnabled() const { return false; }
+    virtual bool hasRemoteSafeHeader() const { return false; }
+    virtual bool remoteSafeEnabled() const { return false; }
     
 protected:
     unsigned long timeout = RPC_DEFAULT_TIMEOUT;

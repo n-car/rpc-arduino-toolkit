@@ -5,6 +5,7 @@
 #ifndef RPC_CLIENT_H
 #define RPC_CLIENT_H
 
+#include <string.h>
 #include <ArduinoJson.h>
 #include "RpcConfig.h"
 #include "RpcTypes.h"
@@ -59,20 +60,87 @@ private:
         return false;
     }
 
+#if RPC_ENABLE_SAFE_MODE
+    static String encodeParamsForRequest(const String& params) {
+        if (params.isEmpty()) {
+            return params;
+        }
+
+        StaticJsonDocument<RPC_JSON_DOC_SIZE> source;
+        DeserializationError error = deserializeJson(source, params);
+        if (!error) {
+            StaticJsonDocument<RPC_JSON_DOC_SIZE> encoded;
+            RpcSafe::encodeValue(source.as<JsonVariantConst>(), encoded.to<JsonVariant>());
+
+            String output;
+            serializeJson(encoded, output);
+            return output;
+        }
+
+        return RpcSafe::serializeString(params);
+    }
+
+    static String encodeBatchForRequest(const String& batch) {
+        StaticJsonDocument<RPC_JSON_DOC_SIZE> source;
+        DeserializationError error = deserializeJson(source, batch);
+        if (error || !source.is<JsonArray>()) {
+            return batch;
+        }
+
+        StaticJsonDocument<RPC_JSON_DOC_SIZE> encoded;
+        JsonArray outputBatch = encoded.to<JsonArray>();
+
+        for (JsonVariantConst item : source.as<JsonArrayConst>()) {
+            if (!item.is<JsonObjectConst>()) {
+                RpcSafe::encodeArrayElement(item, outputBatch);
+                continue;
+            }
+
+            JsonObject outputItem = outputBatch.createNestedObject();
+            for (JsonPairConst pair : item.as<JsonObjectConst>()) {
+                const char* key = pair.key().c_str();
+                if (strcmp(key, "params") == 0) {
+                    RpcSafe::encodeValue(pair.value(), outputItem["params"]);
+                } else {
+                    outputItem[key].set(pair.value());
+                }
+            }
+        }
+
+        String output;
+        serializeJson(encoded, output);
+        return output;
+    }
+
+    bool shouldDecodeSafeResponse() const {
+        return transport.isHttp() && transport.remoteSafeEnabled();
+    }
+
+    bool hasRequiredSafeResponseHeader() const {
+        return !transport.isHttp() || transport.hasRemoteSafeHeader();
+    }
+#endif
+
     // Build request JSON
     String buildRequest(const char* method, const String& params, bool isNotification = false) {
+#if RPC_ENABLE_SAFE_MODE
+        String wireParams = encodeParamsForRequest(params);
+#else
+        const String& wireParams = params;
+#endif
+
         String output;
-        output.reserve(64 + strlen(method) + params.length());
+        output.reserve(64 + strlen(method) + wireParams.length());
         output += "{\"jsonrpc\":\"2.0\",\"method\":";
         appendJsonString(output, method);
 
         // Parse params if provided
-        if (!params.isEmpty()) {
+        if (!wireParams.isEmpty()) {
             output += ",\"params\":";
-            if (isJsonParams(params)) {
-                output += params;
+            if (isJsonParams(wireParams)) {
+                output += wireParams;
             } else {
-                appendJsonString(output, params);
+                appendJsonString(output, wireParams);
             }
         }
 
@@ -117,7 +185,19 @@ public:
                     RPC_LOG_F("Client response: %s", responseJson.c_str());
 
                     RpcResponse resp;
+#if RPC_ENABLE_SAFE_MODE
+                    if (!hasRequiredSafeResponseHeader()) {
+                        resp.setError(
+                            RPC_ERROR_INVALID_REQ,
+                            "RPC Compatibility Error: Safe Mode response header missing.",
+                            JsonVariant()
+                        );
+                        return resp;
+                    }
+                    resp.parse(responseJson, shouldDecodeSafeResponse());
+#else
                     resp.parse(responseJson);
+#endif
                     return resp;
                 }
             }
@@ -145,9 +225,15 @@ public:
      * @return RpcBatchResponse object
      */
     RpcBatchResponse callBatch(const String& batch) {
-        RPC_LOG_F("Client batch call: %s", batch.c_str());
+#if RPC_ENABLE_SAFE_MODE
+        String wireBatch = encodeBatchForRequest(batch);
+#else
+        const String& wireBatch = batch;
+#endif
 
-        if (!transport.write(batch)) {
+        RPC_LOG_F("Client batch call: %s", wireBatch.c_str());
+
+        if (!transport.write(wireBatch)) {
             RpcBatchResponse resp;
             resp.setError(RPC_ERROR_SERVER, "Failed to send batch request");
             return resp;
@@ -161,7 +247,15 @@ public:
                     RPC_LOG_F("Client batch response: %s", responseJson.c_str());
 
                     RpcBatchResponse resp;
+#if RPC_ENABLE_SAFE_MODE
+                    if (!hasRequiredSafeResponseHeader()) {
+                        resp.setError(RPC_ERROR_INVALID_REQ, "RPC Compatibility Error: Safe Mode response header missing.");
+                        return resp;
+                    }
+                    resp.parse(responseJson, shouldDecodeSafeResponse());
+#else
                     resp.parse(responseJson);
+#endif
                     return resp;
                 }
             }

@@ -25,12 +25,16 @@ private:
     bool hasResponse;
     int httpStatus;
     unsigned long socketSettleDelay;
+    bool remoteSafeFlag;
+    bool remoteSafeHeaderSeen;
 
     void resetState() {
         responseBody = "";
         lastErrorMessage = "";
         hasResponse = false;
         httpStatus = 0;
+        remoteSafeFlag = false;
+        remoteSafeHeaderSeen = false;
     }
 
     bool waitForReadable(unsigned long start) {
@@ -62,6 +66,18 @@ private:
             return 0;
         }
         return statusLine.substring(firstSpace + 1, firstSpace + 4).toInt();
+    }
+
+    bool parseBoolHeaderValue(const String& line) const {
+        int colon = line.indexOf(':');
+        if (colon < 0) {
+            return false;
+        }
+
+        String value = line.substring(colon + 1);
+        value.trim();
+        value.toLowerCase();
+        return value == "true" || value == "1";
     }
 
     bool appendResponseChar(int value) {
@@ -184,7 +200,9 @@ public:
           userAgent("rpc-arduino-toolkit"),
           hasResponse(false),
           httpStatus(0),
-          socketSettleDelay(0) {
+          socketSettleDelay(0),
+          remoteSafeFlag(false),
+          remoteSafeHeaderSeen(false) {
         setTimeout(RPC_HTTP_TIMEOUT);
     }
 
@@ -212,6 +230,8 @@ public:
         client.println(userAgent);
         client.println("Content-Type: application/json");
         client.println("Accept: application/json");
+        client.print("X-RPC-Safe-Enabled: ");
+        client.println(RPC_ENABLE_SAFE_MODE ? "true" : "false");
         client.println("Connection: close");
         client.print("Content-Length: ");
         client.println(data.length());
@@ -247,6 +267,9 @@ public:
                 contentLength = line.substring(line.indexOf(':') + 1).toInt();
             } else if (lower.startsWith("transfer-encoding:") && lower.indexOf("chunked") >= 0) {
                 isChunked = true;
+            } else if (lower.startsWith("x-rpc-safe-enabled:")) {
+                remoteSafeHeaderSeen = true;
+                remoteSafeFlag = parseBoolHeaderValue(line);
             }
         }
 
@@ -307,6 +330,18 @@ public:
 
     int lastStatus() const {
         return httpStatus;
+    }
+
+    bool isHttp() const override {
+        return true;
+    }
+
+    bool hasRemoteSafeHeader() const override {
+        return remoteSafeHeaderSeen;
+    }
+
+    bool remoteSafeEnabled() const override {
+        return remoteSafeFlag;
     }
 };
 

@@ -16,6 +16,13 @@ class RpcHttpServerTransport : public RpcTransport {
 private:
     Client& client;
     char buffer[RPC_MAX_REQUEST_SIZE];
+    bool clientSafeFlag;
+    bool clientSafeHeaderSeen;
+
+    void resetRequestState() {
+        clientSafeFlag = false;
+        clientSafeHeaderSeen = false;
+    }
 
     bool waitForReadable(unsigned long start) {
         while (!client.available() && client.connected() && (millis() - start < timeout)) {
@@ -32,6 +39,18 @@ private:
         line = client.readStringUntil('\n');
         line.trim();
         return true;
+    }
+
+    bool parseBoolHeaderValue(const String& line) const {
+        int colon = line.indexOf(':');
+        if (colon < 0) {
+            return false;
+        }
+
+        String value = line.substring(colon + 1);
+        value.trim();
+        value.toLowerCase();
+        return value == "true" || value == "1";
     }
 
     size_t readBodyByLength(size_t contentLength, unsigned long start) {
@@ -74,11 +93,15 @@ private:
     }
 
 public:
-    explicit RpcHttpServerTransport(Client& c) : client(c) {
+    explicit RpcHttpServerTransport(Client& c)
+        : client(c),
+          clientSafeFlag(false),
+          clientSafeHeaderSeen(false) {
         setTimeout(RPC_HTTP_TIMEOUT);
     }
 
     String read() override {
+        resetRequestState();
         unsigned long start = millis();
         if (!waitForReadable(start)) {
             return "";
@@ -105,6 +128,9 @@ public:
                 lower.toLowerCase();
                 if (lower.startsWith("content-length:")) {
                     contentLength = line.substring(line.indexOf(':') + 1).toInt();
+                } else if (lower.startsWith("x-rpc-safe-enabled:")) {
+                    clientSafeHeaderSeen = true;
+                    clientSafeFlag = parseBoolHeaderValue(line);
                 }
             }
         } else {
@@ -132,6 +158,8 @@ public:
         if (data.isEmpty()) {
             client.println("HTTP/1.1 204 No Content");
             client.println("Connection: close");
+            client.print("X-RPC-Safe-Enabled: ");
+            client.println(RPC_ENABLE_SAFE_MODE ? "true" : "false");
             client.println("Content-Length: 0");
             client.println();
             client.flush();
@@ -141,6 +169,8 @@ public:
         client.println("HTTP/1.1 200 OK");
         client.println("Content-Type: application/json");
         client.println("Connection: close");
+        client.print("X-RPC-Safe-Enabled: ");
+        client.println(RPC_ENABLE_SAFE_MODE ? "true" : "false");
         client.print("Content-Length: ");
         client.println(data.length());
         client.println();
@@ -152,6 +182,18 @@ public:
 
     bool available() override {
         return client.available() > 0;
+    }
+
+    bool isHttp() const override {
+        return true;
+    }
+
+    bool hasClientSafeHeader() const override {
+        return clientSafeHeaderSeen;
+    }
+
+    bool clientSafeEnabled() const override {
+        return clientSafeFlag;
     }
 };
 

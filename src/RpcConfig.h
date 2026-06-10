@@ -51,6 +51,11 @@
   #define RPC_ENABLE_SAFE_MODE 0  // Disabled by default to save memory
 #endif
 
+// Require Safe Mode HTTP header when Safe Mode is enabled on a server
+#ifndef RPC_SAFE_STRICT_MODE
+  #define RPC_SAFE_STRICT_MODE 1
+#endif
+
 // Enable JSON-RPC batch handling in RpcServer and RpcClient::callBatch
 #ifndef RPC_ENABLE_BATCH
   #define RPC_ENABLE_BATCH 1

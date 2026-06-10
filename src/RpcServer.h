@@ -56,7 +56,7 @@ private:
     }
 
     // Execute method
-    RpcResponse executeMethod(RpcRequest& req) {
+    RpcResponse executeMethod(RpcRequest& req, bool encodeSafe = false) {
         // Built-in introspection methods (memory-efficient)
         if (req.method == "__rpc.listMethods") {
             StaticJsonDocument<256> doc;
@@ -69,7 +69,7 @@ private:
             }
 
             RpcResponse resp;
-            resp.setResult(doc.as<JsonVariant>(), req.id);
+            resp.setResult(doc.as<JsonVariant>(), req.id, encodeSafe);
             return resp;
         }
 
@@ -80,7 +80,7 @@ private:
             doc["methodCount"] = methodCount;
 
             RpcResponse resp;
-            resp.setResult(doc.as<JsonVariant>(), req.id);
+            resp.setResult(doc.as<JsonVariant>(), req.id, encodeSafe);
             return resp;
         }
 
@@ -126,7 +126,7 @@ private:
             doc["exposeSchema"] = method->exposeSchema;
 
             RpcResponse resp;
-            resp.setResult(doc.as<JsonVariant>(), req.id);
+            resp.setResult(doc.as<JsonVariant>(), req.id, encodeSafe);
             return resp;
         }
 #endif
@@ -137,13 +137,14 @@ private:
             doc["batch"] = (RPC_ENABLE_BATCH != 0);
             doc["introspection"] = true;
             doc["safeMode"] = (RPC_ENABLE_SAFE_MODE != 0);
+            doc["strictMode"] = (RPC_ENABLE_SAFE_MODE != 0) && (RPC_SAFE_STRICT_MODE != 0);
             doc["notifications"] = (RPC_ENABLE_NOTIFICATIONS != 0);
             doc["schemaSupport"] = (RPC_ENABLE_SCHEMA_SUPPORT != 0);
             doc["methodCount"] = methodCount;
             doc["maxMethods"] = MAX_METHODS;
 
             RpcResponse resp;
-            resp.setResult(doc.as<JsonVariant>(), req.id);
+            resp.setResult(doc.as<JsonVariant>(), req.id, encodeSafe);
             return resp;
         }
 
@@ -164,7 +165,7 @@ private:
         try {
             JsonVariant result = method->handler(req.params);
             RpcResponse resp;
-            resp.setResult(result, req.id);
+            resp.setResult(result, req.id, encodeSafe);
             return resp;
         } catch (...) {
             return RpcError::internalError(req.id);
@@ -172,7 +173,7 @@ private:
     }
 
 #if RPC_ENABLE_BATCH
-    String handleBatchRequest(JsonArray batch) {
+    String handleBatchRequest(JsonArray batch, bool encodeSafe = false) {
         if (batch.size() == 0) {
             RpcResponse resp = RpcError::invalidRequest(JsonVariant());
             return resp.toString();
@@ -195,10 +196,10 @@ private:
                     JsonVariant id = item["id"];
                     responseJson = RpcError::invalidRequest(id).toString();
                 } else if (req.isNotification()) {
-                    executeMethod(req);
+                    executeMethod(req, encodeSafe);
                     includeResponse = false;
                 } else {
-                    responseJson = executeMethod(req).toString();
+                    responseJson = executeMethod(req, encodeSafe).toString();
                 }
             }
 
@@ -221,6 +222,98 @@ private:
         return output;
     }
 #endif
+
+    void decodeParamsInPlace(JsonVariant root, bool decodeSafe) {
+#if RPC_ENABLE_SAFE_MODE
+        if (!decodeSafe) {
+            return;
+        }
+
+        if (root.is<JsonArray>()) {
+            for (JsonVariant item : root.as<JsonArray>()) {
+                if (item.is<JsonObject>() && item.containsKey("params")) {
+                    RpcSafe::decodeInPlace(item["params"]);
+                }
+            }
+            return;
+        }
+
+        if (root.is<JsonObject>() && root.containsKey("params")) {
+            RpcSafe::decodeInPlace(root["params"]);
+        }
+#else
+        (void)root;
+        (void)decodeSafe;
+#endif
+    }
+
+    String missingSafeHeaderResponse(const String& json) {
+        StaticJsonDocument<RPC_JSON_DOC_SIZE> doc;
+        DeserializationError error = deserializeJson(doc, json);
+        if (error) {
+            RpcResponse resp = RpcError::parseError(JsonVariant());
+            return resp.toString();
+        }
+
+        if (doc.is<JsonArray>()) {
+#if RPC_ENABLE_BATCH
+            JsonArray batch = doc.as<JsonArray>();
+            if (batch.size() == 0) {
+                RpcResponse resp = RpcError::invalidRequest(JsonVariant());
+                return resp.toString();
+            }
+
+            String output;
+            output.reserve(RPC_MAX_RESPONSE_SIZE);
+            output += '[';
+            bool hasResponse = false;
+
+            for (JsonVariant item : batch) {
+                bool includeResponse = true;
+                JsonVariant id;
+
+                if (item.is<JsonObject>()) {
+                    id = item["id"];
+                    includeResponse = !id.isNull();
+                }
+
+                if (!includeResponse) {
+                    continue;
+                }
+
+                RpcResponse resp = RpcError::compatibilityError(id);
+                if (hasResponse) {
+                    output += ',';
+                }
+                output += resp.toString();
+                hasResponse = true;
+            }
+
+            if (!hasResponse) {
+                return "";
+            }
+
+            output += ']';
+            return output;
+#else
+            RpcResponse resp = RpcError::compatibilityError(JsonVariant());
+            return resp.toString();
+#endif
+        }
+
+        if (!doc.is<JsonObject>()) {
+            RpcResponse resp = RpcError::invalidRequest(JsonVariant());
+            return resp.toString();
+        }
+
+        JsonVariant id = doc["id"];
+        if (id.isNull()) {
+            return "";
+        }
+
+        RpcResponse resp = RpcError::compatibilityError(id);
+        return resp.toString();
+    }
 
 public:
     RpcServer() : methodCount(0) {
@@ -335,13 +428,30 @@ public:
             return "";
         }
 
-        return handleRequest(json);
+        bool decodeSafe = false;
+        bool encodeSafe = false;
+
+#if RPC_ENABLE_SAFE_MODE
+        encodeSafe = true;
+        if (transport.isHttp()) {
+            if ((RPC_SAFE_STRICT_MODE != 0) && !transport.hasClientSafeHeader()) {
+                return missingSafeHeaderResponse(json);
+            }
+            decodeSafe = transport.hasClientSafeHeader() && transport.clientSafeEnabled();
+        }
+#endif
+
+        return handleRequest(json, decodeSafe, encodeSafe);
     }
 
     /**
      * Handle request from JSON string
      */
     String handleRequest(const String& json) {
+        return handleRequest(json, false, (RPC_ENABLE_SAFE_MODE != 0));
+    }
+
+    String handleRequest(const String& json, bool decodeSafe, bool encodeSafe) {
         StaticJsonDocument<RPC_JSON_DOC_SIZE> doc;
         DeserializationError error = deserializeJson(doc, json);
         if (error) {
@@ -350,9 +460,11 @@ public:
             return resp.toString();
         }
 
+        decodeParamsInPlace(doc.as<JsonVariant>(), decodeSafe);
+
         if (doc.is<JsonArray>()) {
 #if RPC_ENABLE_BATCH
-            return handleBatchRequest(doc.as<JsonArray>());
+            return handleBatchRequest(doc.as<JsonArray>(), encodeSafe);
 #else
             RpcResponse resp = RpcError::invalidRequest(JsonVariant());
             return resp.toString();
@@ -367,12 +479,12 @@ public:
 
         // Notification? (no response needed)
         if (req.isNotification()) {
-            executeMethod(req);
+            executeMethod(req, encodeSafe);
             return "";
         }
 
         // Execute and return response
-        RpcResponse resp = executeMethod(req);
+        RpcResponse resp = executeMethod(req, encodeSafe);
         return resp.toString();
     }
 

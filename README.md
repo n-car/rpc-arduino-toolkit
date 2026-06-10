@@ -12,6 +12,9 @@ RPC Arduino Toolkit is an early public version. Version 1.0.0 is currently in de
 
 - The API may still change before the first official release.
 - GitHub installation is currently the recommended method.
+- RPC Toolkit Safe Mode HTTP interoperability is implemented and in testing.
+- Full Safe Mode release confidence still requires physical ESP32/ESP8266 interoperability testing.
+- Safe Mode interoperability test planning is tracked in [`docs/SAFE_MODE_INTEROPERABILITY_TEST_PLAN.md`](docs/SAFE_MODE_INTEROPERABILITY_TEST_PLAN.md).
 - Arduino Library Manager and PlatformIO Registry publication are planned after the first official release is ready.
 
 ## Features
@@ -312,7 +315,7 @@ resp = rpc.call("__rpc.describe", "{\"method\":\"add\"}");
 
 // __rpc.capabilities - Get server capabilities
 resp = rpc.call("__rpc.capabilities");
-// Result: {"batch":true,"introspection":true,"safeMode":false,"notifications":true,"schemaSupport":true,"methodCount":5,"maxMethods":8}
+// Result: {"batch":true,"introspection":true,"safeMode":false,"strictMode":false,"notifications":true,"schemaSupport":true,"methodCount":5,"maxMethods":8}
 ```
 
 **Features:**
@@ -441,9 +444,11 @@ Safe Mode is an optional RPC Toolkit extension for preserving application-level 
 
 JSON-RPC 2.0 remains the default wire format. When Safe Mode is disabled, values are sent as plain JSON values without RPC Toolkit type prefixes.
 
-Optional Safe Mode helper utilities are currently available in this library. Automatic end-to-end Safe Mode encoding/decoding with the other RPC Toolkit implementations is planned for a future release.
+Safe Mode helper utilities are available for explicit string/date/bigint values. When Safe Mode is enabled, HTTP client/server transports also encode and decode params/results recursively using the negotiated Safe Mode header.
 
-This means that `rpc-arduino-toolkit` is currently interoperable with standard JSON-RPC 2.0 clients and servers by default. Full Safe Mode interoperability requires both endpoints to implement and enable the same RPC Toolkit Safe Mode conventions.
+`rpc-arduino-toolkit` is interoperable with standard JSON-RPC 2.0 clients and servers by default. When `RPC_ENABLE_SAFE_MODE=1`, HTTP transports use the same Safe Mode conventions as `rpc-express-toolkit`, including `X-RPC-Safe-Enabled` negotiation and recursive params/result encode/decode.
+
+Full Safe Mode release confidence still requires physical ESP32/ESP8266 interoperability tests against the other RPC Toolkit implementations before the first official release.
 
 Schema validation is planned as an optional layer. The goal is to let endpoints describe expected params and results, optionally validate calls, and preserve type intent when Safe Mode is enabled.
 
@@ -478,9 +483,52 @@ bool isBigInt = RpcSafe::isBigInt("123n");       // true
 - String prefix: `S:` - Distinguishes strings from other types
 - Date prefix: `D:` - Marks timestamps/dates
 - BigInt suffix: `n` - Marks large integers (like JavaScript BigInt)
-- Automatic end-to-end Safe Mode interoperability with other RPC Toolkit implementations is planned
 - Helps preserve type intent when both endpoints use the same conventions
 - Disabled by default (enable with `RPC_ENABLE_SAFE_MODE=1`)
+
+### Standard JSON-RPC Mode
+
+Safe Mode is off by default. Standard requests and responses stay plain JSON-RPC 2.0:
+
+```json
+{"jsonrpc":"2.0","method":"echo","params":{"message":"hello"},"id":1}
+```
+
+```json
+{"jsonrpc":"2.0","result":{"message":"hello"},"id":1}
+```
+
+### Safe Mode HTTP Interoperability
+
+When `RPC_ENABLE_SAFE_MODE=1`, HTTP transports participate in RPC Toolkit Safe Mode negotiation:
+
+```http
+X-RPC-Safe-Enabled: true
+```
+
+When `RPC_ENABLE_SAFE_MODE=0`, HTTP transports still send the header with `false`.
+
+Safe Mode encoding examples:
+
+```json
+{
+  "message": "S:hello",
+  "timestamp": "D:1234567890",
+  "largeCounter": "9007199254740992n"
+}
+```
+
+HTTP Safe Mode behavior:
+- `RpcHttpClientTransport` sends `X-RPC-Safe-Enabled` and records the server response header.
+- `RpcHttpServerTransport` records the client header and includes its local Safe Mode state in responses.
+- `RpcServer` recursively decodes `params` when the incoming HTTP header is `true`.
+- `RpcServer` recursively encodes response `result` values when `RPC_ENABLE_SAFE_MODE=1`.
+- `RpcClient` recursively decodes response `result` and `error.data` when the response header is `true`.
+- If `RPC_ENABLE_SAFE_MODE=1` and `RPC_SAFE_STRICT_MODE=1`, HTTP server requests without `X-RPC-Safe-Enabled` are rejected with JSON-RPC error `-32600`.
+- Serial and other non-HTTP transports can use Safe Mode helper encoding/decoding, but they do not support HTTP header negotiation and do not require Safe Mode headers.
+- Arduino preserves BigInt marker values such as `"9007199254740993n"` as strings in generic JSON params/results; it does not expose JavaScript `BigInt` semantics.
+
+See [`docs/SAFE_MODE_INTEROPERABILITY_TEST_PLAN.md`](docs/SAFE_MODE_INTEROPERABILITY_TEST_PLAN.md) for the physical ESP32/ESP8266 interoperability test matrix against `rpc-express-toolkit` Safe Mode.
 
 See `examples/SafeMode/` for complete example.
 
@@ -497,7 +545,8 @@ See `examples/SafeMode/` for complete example.
 #define RPC_MAX_DESCRIPTION 64      // Max description metadata length
 
 // Features
-#define RPC_ENABLE_SAFE_MODE 0      // Enable Safe Mode helper serialization (S:, D:, n)
+#define RPC_ENABLE_SAFE_MODE 0      // Enable RPC Toolkit Safe Mode
+#define RPC_SAFE_STRICT_MODE 1      // Require Safe Mode HTTP header when Safe Mode is enabled
 #define RPC_ENABLE_BATCH 1          // Enable JSON-RPC batch requests
 #define RPC_ENABLE_LOGGING 0        // Enable debug logging
 #define RPC_ENABLE_NOTIFICATIONS 1  // Enable fire-and-forget calls
@@ -523,7 +572,9 @@ See `examples/SafeMode/` for complete example.
 
 ## Cross-Platform Compatibility
 
-Designed to work with standard JSON-RPC 2.0 clients and servers in the RPC Toolkit ecosystem by default. Safe Mode interoperability across implementations is planned and requires compatible endpoints to enable the same conventions.
+Designed to work with standard JSON-RPC 2.0 clients and servers in the RPC Toolkit ecosystem by default. Optional HTTP Safe Mode interoperability follows the same header and value-prefix conventions used by `rpc-express-toolkit`; physical ESP32/ESP8266 validation is still required before the first official release.
+
+The Safe Mode interoperability test plan is maintained in [`docs/SAFE_MODE_INTEROPERABILITY_TEST_PLAN.md`](docs/SAFE_MODE_INTEROPERABILITY_TEST_PLAN.md).
 
 - **rpc-express-toolkit** (Node.js/Express)
 - **rpc-php-toolkit** (PHP)
@@ -551,13 +602,29 @@ Physical ESP32 interoperability tests are maintained separately during developme
 
 **Node.js Server (Express):**
 ```javascript
+const express = require('express');
 const { RpcEndpoint } = require('rpc-express-toolkit');
-const rpc = new RpcEndpoint('/api/rpc');
 
-rpc.addMethod('add', (params) => {
+const app = express();
+app.use(express.json());
+
+const rpc = new RpcEndpoint(app, {}, { endpoint: '/api' });
+
+rpc.addMethod('add', (req, ctx, params) => {
     return params.a + params.b;
 });
+
+app.listen(3000);
 ```
+
+For an RPC Toolkit Safe Mode HTTP endpoint, compile the Arduino sketch with `-DRPC_ENABLE_SAFE_MODE=1` and use `rpc-express-toolkit/safe` or an endpoint configured with `safeEnabled: true`:
+
+```javascript
+const { createSafeEndpoint } = require('rpc-express-toolkit/safe');
+const rpc = createSafeEndpoint(app, {}, { endpoint: '/api' });
+```
+
+Both sides exchange `X-RPC-Safe-Enabled` and recursively encode/decode params and results.
 
 ## Examples
 
@@ -567,7 +634,7 @@ See the `examples/` folder for complete working examples:
 - **BasicClient** - Simple RPC client on Serial
 - **WiFiServer** - ESP32 HTTP RPC server
 - **Introspection** - Demonstrates __rpc.* methods and description metadata
-- **SafeMode** - Optional helper utilities for S:, D:, and n value prefixes
+- **SafeMode** - Optional Safe Mode helper utilities and value-prefix conventions
 
 ## API Reference
 
@@ -623,6 +690,9 @@ public:
 class RpcHttpServerTransport : public RpcTransport {
 public:
     explicit RpcHttpServerTransport(Client& client);
+
+    bool hasClientSafeHeader() const;
+    bool clientSafeEnabled() const;
 };
 ```
 
@@ -638,6 +708,8 @@ public:
     void setSocketSettleDelay(unsigned long ms);
     const String& lastError() const;
     int lastStatus() const;
+    bool hasRemoteSafeHeader() const;
+    bool remoteSafeEnabled() const;
 };
 ```
 
@@ -679,7 +751,7 @@ public:
 
 ## Related Projects
 
-RPC Toolkit ecosystem projects. Standard JSON-RPC interoperability is the current/default compatibility target; Safe Mode interoperability is planned.
+RPC Toolkit ecosystem projects. Standard JSON-RPC interoperability is the default compatibility target; optional Safe Mode HTTP interoperability follows the shared RPC Toolkit conventions and remains under physical-device validation for this Arduino implementation.
 
 - [rpc-express-toolkit](https://github.com/n-car/rpc-express-toolkit) - Node.js/Express implementation
 - [rpc-php-toolkit](https://github.com/n-car/rpc-php-toolkit) - PHP implementation
@@ -716,7 +788,11 @@ pio test -e native
 - [x] Built-in introspection
 - [x] Batch requests
 - [x] Optional Safe Mode helper utilities
+- [x] RPC Toolkit Safe Mode HTTP header negotiation
+- [x] Recursive Safe Mode encode/decode for params and results
+- [x] Safe Mode interoperability test plan
 - [x] Basic examples for Serial, WiFi, introspection, and Safe Mode
+- [ ] Physical ESP32/ESP8266 Safe Mode interoperability validation
 - [ ] Finalize public API before official release
 - [ ] Publish first GitHub release
 
@@ -724,7 +800,6 @@ pio test -e native
 - [ ] Arduino Library Manager publication
 - [ ] PlatformIO Registry publication
 - [ ] Bluetooth LE transport (ESP32)
-- [ ] End-to-end Safe Mode encoding/decoding across RPC Toolkit implementations
 - [ ] Optional schema-based params/result validation
 
 ### Future Transport and Discovery Work
