@@ -11,13 +11,31 @@
  * - __rpc.capabilities: Get server capabilities and features
  */
 
-#include <RpcArduino.h>
+#include <RpcServer.h>
+#include <RpcSerialTransport.h>
 
 // Create RPC server
 RpcServer<16> rpc;
+RpcSerialTransport transport(Serial);
+StaticJsonDocument<256> rpcResultDoc;
 
-// Transport (Serial in this example)
-RpcTransportSerial transport;
+JsonVariant makeNumberResult(long value) {
+    rpcResultDoc.clear();
+    rpcResultDoc.set(value);
+    return rpcResultDoc.as<JsonVariant>();
+}
+
+JsonVariant makeStringResult(const char* value) {
+    rpcResultDoc.clear();
+    rpcResultDoc.set(value);
+    return rpcResultDoc.as<JsonVariant>();
+}
+
+JsonVariant makeStringResult(const String& value) {
+    rpcResultDoc.clear();
+    rpcResultDoc.set(value);
+    return rpcResultDoc.as<JsonVariant>();
+}
 
 void setup() {
     Serial.begin(115200);
@@ -28,29 +46,29 @@ void setup() {
 
     // Register test methods (simple without schema)
     rpc.addMethod("ping", []() -> JsonVariant {
-        return "pong";
+        return makeStringResult("pong");
     });
 
     // Register method with description and schema exposure
     rpc.addMethod("add", [](JsonVariantConst params) -> JsonVariant {
         int a = params["a"] | 0;
         int b = params["b"] | 0;
-        return a + b;
+        return makeNumberResult(a + b);
     }, "Add two numbers", true);  // Description + expose schema
 
     rpc.addMethod("getUptime", []() -> JsonVariant {
-        return millis();
+        return makeNumberResult(millis());
     }, "Get system uptime in milliseconds", true);
 
     rpc.addMethod("echo", [](JsonVariantConst params) -> JsonVariant {
         String msg = params["message"] | "";
-        return msg;
+        return makeStringResult(msg);
     }, "Echo back the message parameter", true);
 
     rpc.addMethod("multiply", [](JsonVariantConst params) -> JsonVariant {
         int a = params["a"] | 1;
         int b = params["b"] | 1;
-        return a * b;
+        return makeNumberResult(a * b);
     }, "Multiply two numbers", true);
 
     Serial.println("Methods registered:");

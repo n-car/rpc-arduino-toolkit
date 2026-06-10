@@ -8,13 +8,31 @@
  * or add build flag: -DRPC_ENABLE_SAFE_MODE=1
  */
 
-#include <RpcArduino.h>
+#include <RpcServer.h>
+#include <RpcSerialTransport.h>
 
 // Create RPC server
 RpcServer<8> rpc;
+RpcSerialTransport transport(Serial);
+StaticJsonDocument<256> rpcResultDoc;
 
-// Transport (Serial in this example)
-RpcTransportSerial transport;
+JsonVariant makeNumberResult(long value) {
+    rpcResultDoc.clear();
+    rpcResultDoc.set(value);
+    return rpcResultDoc.as<JsonVariant>();
+}
+
+JsonVariant makeStringResult(const char* value) {
+    rpcResultDoc.clear();
+    rpcResultDoc.set(value);
+    return rpcResultDoc.as<JsonVariant>();
+}
+
+JsonVariant makeStringResult(const String& value) {
+    rpcResultDoc.clear();
+    rpcResultDoc.set(value);
+    return rpcResultDoc.as<JsonVariant>();
+}
 
 void setup() {
     Serial.begin(115200);
@@ -34,15 +52,15 @@ void setup() {
 
     // Register methods that demonstrate safe serialization
     rpc.addMethod("getString", []() -> JsonVariant {
-        return "Hello from Arduino";
+        return makeStringResult("Hello from Arduino");
     }, "Returns a string", true);
 
     rpc.addMethod("getTimestamp", []() -> JsonVariant {
         // Return current timestamp (millis since boot)
 #if RPC_ENABLE_SAFE_MODE
-        return RpcSafe::serializeDate(millis() / 1000);
+        return makeStringResult(RpcSafe::serializeDate(millis() / 1000));
 #else
-        return millis() / 1000;
+        return makeNumberResult(millis() / 1000);
 #endif
     }, "Returns current timestamp", true);
 
@@ -50,9 +68,9 @@ void setup() {
         // Return a large number
         long long bigNum = 9007199254740992LL;  // Larger than safe JS integer
 #if RPC_ENABLE_SAFE_MODE
-        return RpcSafe::serializeBigInt(bigNum);
+        return makeStringResult(RpcSafe::serializeBigInt(bigNum));
 #else
-        return (long)bigNum;  // Might lose precision on Arduino
+        return makeNumberResult((long)bigNum);  // Might lose precision on Arduino
 #endif
     }, "Returns a large number", true);
 
@@ -66,14 +84,14 @@ void setup() {
         }
 
         // Return with safe prefix
-        return RpcSafe::serializeString(msg);
+        return makeStringResult(RpcSafe::serializeString(msg));
 #else
-        return msg;
+        return makeStringResult(msg);
 #endif
     }, "Echo message with safe serialization", true);
 
     rpc.addMethod("processData", [](JsonVariantConst params) -> JsonVariant {
-        StaticJsonDocument<256> result;
+        rpcResultDoc.clear();
 
         // Process different data types
         String text = params["text"] | "";
@@ -86,16 +104,18 @@ void setup() {
         }
 
         // Create safe response
-        result["processedText"] = RpcSafe::serializeString(text.toUpperCase());
-        result["receivedAt"] = RpcSafe::serializeDate(millis() / 1000);
-        result["inputTimestamp"] = timestamp;
+        text.toUpperCase();
+        rpcResultDoc["processedText"] = RpcSafe::serializeString(text);
+        rpcResultDoc["receivedAt"] = RpcSafe::serializeDate(millis() / 1000);
+        rpcResultDoc["inputTimestamp"] = timestamp;
 #else
-        result["processedText"] = text.toUpperCase();
-        result["receivedAt"] = millis() / 1000;
-        result["inputTimestamp"] = timestamp;
+        text.toUpperCase();
+        rpcResultDoc["processedText"] = text;
+        rpcResultDoc["receivedAt"] = millis() / 1000;
+        rpcResultDoc["inputTimestamp"] = timestamp;
 #endif
 
-        return result.as<JsonVariant>();
+        return rpcResultDoc.as<JsonVariant>();
     }, "Process data with safe serialization", true);
 
     Serial.println("Methods registered:");

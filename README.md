@@ -25,11 +25,12 @@ RPC Arduino Toolkit is an early public version. Version 1.0.0 is currently in de
 - **Cross-Platform** - Designed to interoperate with compatible RPC Toolkit clients and servers
 
 ### Supported Platforms
-- **Arduino** (Uno, Mega, Nano, etc.) - 2KB+ RAM
-- **ESP32** - WiFi supported; BLE transport planned
-- **ESP8266** - WiFi supported
-- **STM32** - Via Arduino framework
-- **Raspberry Pi Pico** (RP2040)
+- **ESP32** - Current validation target; WiFi/HTTP supported
+- **ESP8266** - WiFi/HTTP supported by design through Arduino `Client` sockets
+- **Arduino-compatible cores with C++ `std::function` support** - Serial transport and core RPC types
+- **STM32 / RP2040** - Planned validation through the Arduino framework
+
+AVR boards such as Uno, Mega, and Nano are not a validated target for the current implementation.
 
 ### Supported Transports
 
@@ -96,6 +97,19 @@ The PlatformIO Registry name will be used only after the library is officially p
 // Create server with max 8 methods
 RpcServer<8> rpc;
 WiFiServer server(8080);
+StaticJsonDocument<128> resultDoc;
+
+JsonVariant makeBoolResult(bool value) {
+    resultDoc.clear();
+    resultDoc.set(value);
+    return resultDoc.as<JsonVariant>();
+}
+
+JsonVariant makeNumberResult(float value) {
+    resultDoc.clear();
+    resultDoc.set(value);
+    return resultDoc.as<JsonVariant>();
+}
 
 void setup() {
     Serial.begin(115200);
@@ -114,13 +128,13 @@ void setup() {
         int pin = params["pin"];
         bool state = params["state"];
         digitalWrite(pin, state ? HIGH : LOW);
-        return true;
+        return makeBoolResult(true);
     });
 
     rpc.addMethod("readTemp", []() -> JsonVariant {
         // Read temperature sensor (example)
         float temp = analogRead(A0) * 0.1;
-        return temp;
+        return makeNumberResult(temp);
     });
 
     // Start server
@@ -178,6 +192,19 @@ void loop() {
 #include <RpcSerialTransport.h>
 
 RpcServer<4> rpc;
+StaticJsonDocument<64> resultDoc;
+
+JsonVariant makeBoolResult(bool value) {
+    resultDoc.clear();
+    resultDoc.set(value);
+    return resultDoc.as<JsonVariant>();
+}
+
+JsonVariant makeNumberResult(int value) {
+    resultDoc.clear();
+    resultDoc.set(value);
+    return resultDoc.as<JsonVariant>();
+}
 
 void setup() {
     Serial.begin(115200);
@@ -187,13 +214,13 @@ void setup() {
     rpc.addMethod("setLED", [](JsonVariantConst params) -> JsonVariant {
         bool state = params["state"];
         digitalWrite(LED_BUILTIN, state ? HIGH : LOW);
-        return state;
+        return makeBoolResult(state);
     });
 
     // Register analog read
     rpc.addMethod("readAnalog", [](JsonVariantConst params) -> JsonVariant {
         int pin = params["pin"];
-        return analogRead(pin);
+        return makeNumberResult(analogRead(pin));
     });
 }
 
@@ -298,16 +325,30 @@ resp = rpc.call("__rpc.capabilities");
 **Register methods with schema information:**
 
 ```cpp
+StaticJsonDocument<64> resultDoc;
+
+JsonVariant makeStringResult(const char* value) {
+    resultDoc.clear();
+    resultDoc.set(value);
+    return resultDoc.as<JsonVariant>();
+}
+
+JsonVariant makeNumberResult(int value) {
+    resultDoc.clear();
+    resultDoc.set(value);
+    return resultDoc.as<JsonVariant>();
+}
+
 // Simple method without schema
 rpc.addMethod("ping", []() -> JsonVariant {
-    return "pong";
+    return makeStringResult("pong");
 });
 
 // Method with description and schema exposure
 rpc.addMethod("add", [](JsonVariantConst params) -> JsonVariant {
     int a = params["a"] | 0;
     int b = params["b"] | 0;
-    return a + b;
+    return makeNumberResult(a + b);
 }, "Add two numbers", true);  // description, exposeSchema
 ```
 
@@ -367,14 +408,21 @@ RpcServer<8> server;  // 8 methods max
 StaticJsonDocument<512> doc;
 ```
 
-### Flash Storage (PROGMEM)
+### Handler Result Storage
+
+Handlers return `JsonVariant` views. Store owned scalar/object results in a document that remains alive until the response is serialized:
 
 ```cpp
-// Store strings in flash memory
-const char METHOD_NAME[] PROGMEM = "myMethod";
+StaticJsonDocument<64> resultDoc;
 
-rpc.addMethod(FPSTR(METHOD_NAME), []() {
-    return 42;
+JsonVariant makeNumberResult(int value) {
+    resultDoc.clear();
+    resultDoc.set(value);
+    return resultDoc.as<JsonVariant>();
+}
+
+rpc.addMethod("answer", []() -> JsonVariant {
+    return makeNumberResult(42);
 });
 ```
 
@@ -452,8 +500,6 @@ See `examples/SafeMode/` for complete example.
 
 | Platform | Flash (Code) | RAM (Static) | RAM (Runtime) | Features |
 |----------|--------------|--------------|---------------|----------|
-| Arduino Uno | ~8KB | ~200B | ~512B | Basic |
-| Arduino Uno + Schema | ~9KB | ~400B | ~512B | +Schema |
 | ESP32 | ~12KB | ~300B | ~1KB | Full |
 | ESP8266 | ~10KB | ~250B | ~800B | Full |
 
@@ -521,6 +567,9 @@ class RpcServer {
 public:
     // Register a method
     bool addMethod(const char* name, RpcMethodHandler handler);
+    bool addMethod(const char* name, RpcMethodHandler handler, const char* description, bool exposeSchema = false);
+    bool addMethod(const char* name, RpcSimpleHandler handler);
+    bool addMethod(const char* name, RpcSimpleHandler handler, const char* description, bool exposeSchema = false);
 
     // Handler signature
     // JsonVariant handler(JsonVariantConst params);
@@ -632,7 +681,6 @@ Compatible projects in the RPC Toolkit ecosystem:
 ```bash
 # Using PlatformIO
 pio run -e esp32dev
-pio run -e arduino_uno
 pio run -e esp8266
 
 # Upload to device

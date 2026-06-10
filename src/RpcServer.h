@@ -302,6 +302,16 @@ public:
     }
 
     /**
+     * Register a simple method with description/schema metadata
+     */
+    bool addMethod(const char* name, RpcSimpleHandler handler, const char* description, bool exposeSchema = false) {
+        return addMethod(name, [handler](JsonVariantConst params) -> JsonVariant {
+            (void)params;
+            return handler();
+        }, description, exposeSchema);
+    }
+
+    /**
      * Remove a method
      */
     bool removeMethod(const char* name) {
