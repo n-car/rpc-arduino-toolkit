@@ -17,12 +17,12 @@ RPC Arduino Toolkit is an early public version. Version 1.0.0 is currently in de
 ## Features
 
 ### Core Features
-- **JSON-RPC 2.0 support** - Client/server request handling with a small embedded footprint
+- **JSON-RPC 2.0 support** - Standard JSON-RPC 2.0 by default. Typed Safe Mode extensions only when explicitly enabled by compatible endpoints.
 - **Client & Server** - Both RPC client and server implementations
 - **Built-in Introspection** - API discovery with `__rpc.listMethods`, `__rpc.version`, `__rpc.describe`, and `__rpc.capabilities`
 - **Multiple Transports** - Serial plus HTTP client/server transports over Arduino `Client` sockets
 - **Memory Efficient** - Static allocation, minimal RAM usage
-- **Cross-Platform** - Designed to interoperate with compatible RPC Toolkit clients and servers
+- **Cross-Platform** - Designed for standard JSON-RPC interoperability with compatible clients and servers
 
 ### Supported Platforms
 - **ESP32** - Current validation target; WiFi/HTTP supported
@@ -271,7 +271,7 @@ if (batchResp.isValid() && batchResp.count() == 2) {
 }
 ```
 
-`RpcServer` also accepts JSON-RPC batch request arrays when `RPC_ENABLE_BATCH` is enabled. Notifications inside a batch are executed without response entries; if all batch items are notifications, HTTP transports return `204 No Content`.
+`RpcServer` also accepts JSON-RPC batch request arrays when `RPC_ENABLE_BATCH` is enabled. Notifications inside a batch are executed without response entries; if all batch items are notifications, HTTP transports return `204 No Content`. Batch handling is implemented and should receive more field testing before the first official release.
 
 ### Notifications (No Response)
 
@@ -306,7 +306,7 @@ RpcResponse resp = rpc.call("__rpc.listMethods");
 resp = rpc.call("__rpc.version");
 // Result: {"toolkit":"rpc-arduino-toolkit","version":"1.0.0","methodCount":3}
 
-// __rpc.describe - Get method description and schema info (requires RPC_ENABLE_SCHEMA_SUPPORT)
+// __rpc.describe - Get method description metadata (requires RPC_ENABLE_SCHEMA_SUPPORT)
 resp = rpc.call("__rpc.describe", "{\"method\":\"add\"}");
 // Result: {"name":"add","description":"Add two numbers","exposeSchema":true}
 
@@ -319,10 +319,10 @@ resp = rpc.call("__rpc.capabilities");
 - Automatically available on all RPC servers
 - No registration needed - built into `executeMethod()`
 - Minimal memory footprint (~800 bytes)
-- Compatible with cross-platform toolkits
-- Schema support optional (can be disabled to save ~200 bytes per method)
+- Usable by standard JSON-RPC clients
+- Description metadata support optional (can be disabled to save ~200 bytes per method)
 
-**Register methods with schema information:**
+**Register methods with description metadata:**
 
 ```cpp
 StaticJsonDocument<64> resultDoc;
@@ -339,12 +339,12 @@ JsonVariant makeNumberResult(int value) {
     return resultDoc.as<JsonVariant>();
 }
 
-// Simple method without schema
+// Simple method without metadata
 rpc.addMethod("ping", []() -> JsonVariant {
     return makeStringResult("pong");
 });
 
-// Method with description and schema exposure
+// Method with description metadata exposure
 rpc.addMethod("add", [](JsonVariantConst params) -> JsonVariant {
     int a = params["a"] | 0;
     int b = params["b"] | 0;
@@ -431,13 +431,25 @@ rpc.addMethod("answer", []() -> JsonVariant {
 ```cpp
 // In RpcConfig.h or build flags
 #define RPC_ENABLE_SAFE_MODE 0      // Disable safe mode (save ~1KB)
-#define RPC_ENABLE_SCHEMA_SUPPORT 0 // Disable schema support (save ~200B/method)
+#define RPC_ENABLE_SCHEMA_SUPPORT 0 // Disable description metadata (save ~200B/method)
 #define RPC_MAX_METHOD_NAME 16      // Limit method name length
 ```
 
-### Safe Mode Serialization
+## Safe Mode
 
-Safe mode adds prefixes to disambiguate types when serializing to JSON (disabled by default to save memory):
+Safe Mode is an optional RPC Toolkit extension for preserving application-level value types across JSON-RPC 2.0 boundaries.
+
+JSON-RPC 2.0 remains the default wire format. When Safe Mode is disabled, values are sent as plain JSON values without RPC Toolkit type prefixes.
+
+Optional Safe Mode helper utilities are currently available in this library. Automatic end-to-end Safe Mode encoding/decoding with the other RPC Toolkit implementations is planned for a future release.
+
+This means that `rpc-arduino-toolkit` is currently interoperable with standard JSON-RPC 2.0 clients and servers by default. Full Safe Mode interoperability requires both endpoints to implement and enable the same RPC Toolkit Safe Mode conventions.
+
+Schema validation is planned as an optional layer. The goal is to let endpoints describe expected params and results, optionally validate calls, and preserve type intent when Safe Mode is enabled.
+
+### Safe Mode Helper Utilities
+
+Safe Mode helpers can add prefixes to disambiguate application-level types when serializing values (disabled by default to save memory):
 
 ```cpp
 // Enable in RpcConfig.h
@@ -462,12 +474,12 @@ bool isDate = RpcSafe::isSafeDate("D:12345");    // true
 bool isBigInt = RpcSafe::isBigInt("123n");       // true
 ```
 
-**Safe Mode Features:**
+**Safe Mode Helpers:**
 - String prefix: `S:` - Distinguishes strings from other types
 - Date prefix: `D:` - Marks timestamps/dates
 - BigInt suffix: `n` - Marks large integers (like JavaScript BigInt)
-- Compatible with RPC Toolkit implementations that use the same JSON-RPC conventions
-- Prevents type confusion in JSON serialization
+- Automatic end-to-end Safe Mode interoperability with other RPC Toolkit implementations is planned
+- Helps preserve type intent when both endpoints use the same conventions
 - Disabled by default (enable with `RPC_ENABLE_SAFE_MODE=1`)
 
 See `examples/SafeMode/` for complete example.
@@ -482,14 +494,14 @@ See `examples/SafeMode/` for complete example.
 #define RPC_MAX_REQUEST_SIZE 512    // Max JSON request size
 #define RPC_MAX_RESPONSE_SIZE 512   // Max JSON response size
 #define RPC_MAX_METHOD_NAME 32      // Max method name length
-#define RPC_MAX_DESCRIPTION 64      // Max description length (schema support)
+#define RPC_MAX_DESCRIPTION 64      // Max description metadata length
 
 // Features
-#define RPC_ENABLE_SAFE_MODE 0      // Enable safe serialization (S:, D:, n)
+#define RPC_ENABLE_SAFE_MODE 0      // Enable Safe Mode helper serialization (S:, D:, n)
 #define RPC_ENABLE_BATCH 1          // Enable JSON-RPC batch requests
 #define RPC_ENABLE_LOGGING 0        // Enable debug logging
 #define RPC_ENABLE_NOTIFICATIONS 1  // Enable fire-and-forget calls
-#define RPC_ENABLE_SCHEMA_SUPPORT 1 // Enable method descriptions
+#define RPC_ENABLE_SCHEMA_SUPPORT 1 // Enable method description metadata
 
 // Timeouts
 #define RPC_DEFAULT_TIMEOUT 5000    // Default timeout (ms)
@@ -504,14 +516,14 @@ See `examples/SafeMode/` for complete example.
 | ESP8266 | ~10KB | ~250B | ~800B | Full |
 
 **Feature Impact:**
-- `RPC_ENABLE_SCHEMA_SUPPORT=1`: +200 bytes per method (description storage)
+- `RPC_ENABLE_SCHEMA_SUPPORT=1`: +200 bytes per method (description metadata storage)
 - `RPC_ENABLE_SAFE_MODE=1`: +1KB Flash, +50 bytes RAM
 
 *Note: Values depend on enabled features and registered methods*
 
 ## Cross-Platform Compatibility
 
-Designed to work with compatible JSON-RPC clients and servers in the RPC Toolkit ecosystem:
+Designed to work with standard JSON-RPC 2.0 clients and servers in the RPC Toolkit ecosystem by default. Safe Mode interoperability across implementations is planned and requires compatible endpoints to enable the same conventions.
 
 - **rpc-express-toolkit** (Node.js/Express)
 - **rpc-php-toolkit** (PHP)
@@ -554,8 +566,8 @@ See the `examples/` folder for complete working examples:
 - **BasicServer** - Simple RPC server on Serial
 - **BasicClient** - Simple RPC client on Serial
 - **WiFiServer** - ESP32 HTTP RPC server
-- **Introspection** - Demonstrates __rpc.* methods and schema support
-- **SafeMode** - Safe serialization with S:, D:, n prefixes
+- **Introspection** - Demonstrates __rpc.* methods and description metadata
+- **SafeMode** - Optional helper utilities for S:, D:, and n value prefixes
 
 ## API Reference
 
@@ -667,7 +679,7 @@ public:
 
 ## Related Projects
 
-Compatible projects in the RPC Toolkit ecosystem:
+RPC Toolkit ecosystem projects. Standard JSON-RPC interoperability is the current/default compatibility target; Safe Mode interoperability is planned.
 
 - [rpc-express-toolkit](https://github.com/n-car/rpc-express-toolkit) - Node.js/Express implementation
 - [rpc-php-toolkit](https://github.com/n-car/rpc-php-toolkit) - PHP implementation
@@ -703,7 +715,7 @@ pio test -e native
 - [x] HTTP server transport over Arduino Client-compatible sockets
 - [x] Built-in introspection
 - [x] Batch requests
-- [x] Safe Mode support
+- [x] Optional Safe Mode helper utilities
 - [x] Basic examples for Serial, WiFi, introspection, and Safe Mode
 - [ ] Finalize public API before official release
 - [ ] Publish first GitHub release
@@ -712,7 +724,8 @@ pio test -e native
 - [ ] Arduino Library Manager publication
 - [ ] PlatformIO Registry publication
 - [ ] Bluetooth LE transport (ESP32)
-- [ ] JSON Schema param validation (validate incoming params against a declared schema)
+- [ ] End-to-end Safe Mode encoding/decoding across RPC Toolkit implementations
+- [ ] Optional schema-based params/result validation
 
 ### Future Transport and Discovery Work
 - [ ] LoRa transport
