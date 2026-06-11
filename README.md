@@ -868,7 +868,8 @@ pio test -e native
 - [ ] Capture ESP8266 Safe Mode interoperability validation evidence
 - [ ] Review dependency compatibility before declaring final ArduinoJson support range
 - [ ] Finalize public API before official release
-- [ ] Publish first GitHub release
+- [x] Publish first GitHub pre-release candidate
+- [ ] Publish first final GitHub release
 
 ### Planned After v1.0.0
 - [ ] Finalize Arduino Library Manager-compliant package metadata
