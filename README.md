@@ -14,7 +14,8 @@ RPC Arduino Toolkit is an early public version. Version 1.0.0 is currently in de
 - GitHub installation is currently the recommended method.
 - RPC Toolkit Safe Mode HTTP interoperability is implemented and in testing.
 - Full Safe Mode release confidence still requires physical ESP32/ESP8266 interoperability testing.
-- Safe Mode interoperability test planning is tracked in [`docs/SAFE_MODE_INTEROPERABILITY_TEST_PLAN.md`](docs/SAFE_MODE_INTEROPERABILITY_TEST_PLAN.md).
+- Safe Mode interoperability test coverage is tracked in [`docs/SAFE_MODE_INTEROPERABILITY_TEST_PLAN.md`](docs/SAFE_MODE_INTEROPERABILITY_TEST_PLAN.md).
+- First-release gates are API finalization, physical ESP32/ESP8266 Safe Mode validation, dependency compatibility review, and a tagged GitHub release.
 - Arduino Library Manager and PlatformIO Registry publication are planned after the first official release is ready.
 
 ## Features
@@ -675,8 +676,8 @@ app.listen(3000);
 For an RPC Toolkit Safe Mode HTTP endpoint, compile the Arduino sketch with `-DRPC_ENABLE_SAFE_MODE=1` and use `rpc-express-toolkit/safe` or an endpoint configured with `safeEnabled: true`:
 
 ```javascript
-const { createSafeEndpoint } = require('rpc-express-toolkit/safe');
-const rpc = createSafeEndpoint(app, {}, { endpoint: '/api' });
+const { RpcSafeEndpoint } = require('rpc-express-toolkit/safe');
+const rpc = new RpcSafeEndpoint(app, {}, { endpoint: '/api' });
 ```
 
 Both sides exchange `X-RPC-Safe-Enabled` and recursively encode/decode params and results.
@@ -864,10 +865,12 @@ pio test -e native
 - [x] Focused Safe Mode marker-like string round-trip test sketch
 - [x] Basic examples for Serial, WiFi, introspection, and Safe Mode
 - [ ] Physical ESP32/ESP8266 Safe Mode interoperability validation
+- [ ] Review dependency compatibility before declaring final ArduinoJson support range
 - [ ] Finalize public API before official release
 - [ ] Publish first GitHub release
 
 ### Planned After v1.0.0
+- [ ] Finalize Arduino Library Manager-compliant package metadata
 - [ ] Arduino Library Manager publication
 - [ ] PlatformIO Registry publication
 - [ ] Bluetooth LE transport (ESP32)
