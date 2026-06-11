@@ -35,7 +35,7 @@
   "frameworks": "arduino",
   "platforms": ["espressif32", "espressif8266"],
   "dependencies": {
-    "bblanchon/ArduinoJson": "^6.21.0"
+    "bblanchon/ArduinoJson": "^7.0.0"
   },
   "export": {
     "exclude": [
