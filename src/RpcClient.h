@@ -100,7 +100,7 @@ private:
             for (JsonPairConst pair : item.as<JsonObjectConst>()) {
                 const char* key = pair.key().c_str();
                 if (strcmp(key, "params") == 0) {
-                    RpcSafe::encodeValue(pair.value(), outputItem["params"]);
+                    RpcSafe::encodeObjectMember(pair.value(), outputItem, "params");
                 } else {
                     outputItem[key].set(pair.value());
                 }

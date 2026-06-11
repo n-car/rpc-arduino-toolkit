@@ -163,6 +163,37 @@ public:
         return isSafeString(value) || isSafeDate(value) || isBigInt(value);
     }
 
+    static void encodeObjectMember(JsonVariantConst source, JsonObject object, const char* key) {
+        if (source.isNull()) {
+            object[key] = nullptr;
+            return;
+        }
+
+        if (source.is<JsonObjectConst>()) {
+            JsonObject nestedObject = object.createNestedObject(key);
+            for (JsonPairConst pair : source.as<JsonObjectConst>()) {
+                encodeObjectMember(pair.value(), nestedObject, pair.key().c_str());
+            }
+            return;
+        }
+
+        if (source.is<JsonArrayConst>()) {
+            JsonArray nestedArray = object.createNestedArray(key);
+            for (JsonVariantConst item : source.as<JsonArrayConst>()) {
+                encodeArrayElement(item, nestedArray);
+            }
+            return;
+        }
+
+        if (source.is<const char*>()) {
+            String value = source.as<String>();
+            object[key] = serializeString(value);
+            return;
+        }
+
+        object[key].set(source);
+    }
+
     static void encodeArrayElement(JsonVariantConst source, JsonArray array) {
         if (source.isNull()) {
             array.add(nullptr);
@@ -172,7 +203,7 @@ public:
         if (source.is<JsonObjectConst>()) {
             JsonObject object = array.createNestedObject();
             for (JsonPairConst pair : source.as<JsonObjectConst>()) {
-                encodeValue(pair.value(), object[pair.key().c_str()]);
+                encodeObjectMember(pair.value(), object, pair.key().c_str());
             }
             return;
         }
@@ -207,7 +238,7 @@ public:
         if (source.is<JsonObjectConst>()) {
             JsonObject object = target.to<JsonObject>();
             for (JsonPairConst pair : source.as<JsonObjectConst>()) {
-                encodeValue(pair.value(), object[pair.key().c_str()]);
+                encodeObjectMember(pair.value(), object, pair.key().c_str());
             }
             return;
         }
@@ -278,6 +309,20 @@ private:
 public:
     RpcResponse() : _hasError(false), _isValid(false) {}
 
+    RpcResponse(const RpcResponse& other)
+        : _hasError(other._hasError), _isValid(other._isValid) {
+        doc.set(other.doc);
+    }
+
+    RpcResponse& operator=(const RpcResponse& other) {
+        if (this != &other) {
+            doc.set(other.doc);
+            _hasError = other._hasError;
+            _isValid = other._isValid;
+        }
+        return *this;
+    }
+
     // Success response
     void setResult(JsonVariant result, JsonVariant id) {
         setResult(result, id, false);
@@ -285,16 +330,17 @@ public:
 
     void setResult(JsonVariant result, JsonVariant id, bool encodeSafe) {
         doc.clear();
-        doc["jsonrpc"] = "2.0";
+        JsonObject root = doc.to<JsonObject>();
+        root["jsonrpc"] = "2.0";
 #if RPC_ENABLE_SAFE_MODE
         if (encodeSafe) {
-            RpcSafe::encodeValue(result.as<JsonVariantConst>(), doc["result"]);
+            RpcSafe::encodeObjectMember(result.as<JsonVariantConst>(), root, "result");
         } else
 #endif
         {
-            doc["result"] = result;
+            root["result"].set(result);
         }
-        doc["id"] = id;
+        root["id"].set(id);
         _hasError = false;
         _isValid = true;
     }
@@ -302,64 +348,68 @@ public:
     // Error response
     void setError(int code, const char* message, JsonVariant id) {
         doc.clear();
-        doc["jsonrpc"] = "2.0";
-        JsonObject error = doc.createNestedObject("error");
+        JsonObject root = doc.to<JsonObject>();
+        root["jsonrpc"] = "2.0";
+        JsonObject error = root.createNestedObject("error");
         error["code"] = code;
         error["message"] = message;
-        doc["id"] = id;
+        root["id"].set(id);
         _hasError = true;
         _isValid = true;
     }
 
     void setError(int code, const String& message, JsonVariant id) {
         doc.clear();
-        doc["jsonrpc"] = "2.0";
-        JsonObject error = doc.createNestedObject("error");
+        JsonObject root = doc.to<JsonObject>();
+        root["jsonrpc"] = "2.0";
+        JsonObject error = root.createNestedObject("error");
         error["code"] = code;
         error["message"] = message;
-        doc["id"] = id;
+        root["id"].set(id);
         _hasError = true;
         _isValid = true;
     }
 
     void setError(int code, const char* message, JsonVariantConst data, JsonVariant id, bool encodeSafe = false) {
         doc.clear();
-        doc["jsonrpc"] = "2.0";
-        JsonObject error = doc.createNestedObject("error");
+        JsonObject root = doc.to<JsonObject>();
+        root["jsonrpc"] = "2.0";
+        JsonObject error = root.createNestedObject("error");
         error["code"] = code;
         error["message"] = message;
         if (!data.isNull()) {
 #if RPC_ENABLE_SAFE_MODE
             if (encodeSafe) {
-                RpcSafe::encodeValue(data, error["data"]);
+                RpcSafe::encodeObjectMember(data, error, "data");
             } else
 #endif
             {
-                error["data"] = data;
+                error["data"].set(data);
             }
         }
-        doc["id"] = id;
+        root["id"].set(id);
         _hasError = true;
         _isValid = true;
     }
 
     void setError(int code, const String& message, JsonVariantConst data, JsonVariant id, bool encodeSafe = false) {
         doc.clear();
-        doc["jsonrpc"] = "2.0";
-        JsonObject error = doc.createNestedObject("error");
+        JsonObject root = doc.to<JsonObject>();
+        root["jsonrpc"] = "2.0";
+        JsonObject error = root.createNestedObject("error");
         error["code"] = code;
         error["message"] = message;
         if (!data.isNull()) {
 #if RPC_ENABLE_SAFE_MODE
             if (encodeSafe) {
-                RpcSafe::encodeValue(data, error["data"]);
+                RpcSafe::encodeObjectMember(data, error, "data");
             } else
 #endif
             {
-                error["data"] = data;
+                error["data"].set(data);
             }
         }
-        doc["id"] = id;
+        root["id"].set(id);
         _hasError = true;
         _isValid = true;
     }
