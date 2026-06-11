@@ -138,6 +138,7 @@ private:
             StaticJsonDocument<256> doc;
             doc["batch"] = (RPC_ENABLE_BATCH != 0);
             doc["introspection"] = true;
+            doc["introspectionPrefix"] = "__rpc";
             doc["safeMode"] = (RPC_ENABLE_SAFE_MODE != 0);
             doc["strictMode"] = (RPC_ENABLE_SAFE_MODE != 0) && (RPC_SAFE_STRICT_MODE != 0);
             doc["notifications"] = (RPC_ENABLE_NOTIFICATIONS != 0);
@@ -163,8 +164,11 @@ private:
             return RpcError::methodNotFound(req.method.c_str(), req.id);
         }
 
-        // Execute handler
+        // Execute handler. Some Arduino cores, including ESP8266, compile with
+        // C++ exceptions disabled.
+#if defined(__EXCEPTIONS)
         try {
+#endif
             if (method->returnsResponse) {
                 return method->responseHandler(req, encodeSafe);
             } else {
@@ -173,9 +177,11 @@ private:
                 resp.setResult(result, req.id, encodeSafe);
                 return resp;
             }
+#if defined(__EXCEPTIONS)
         } catch (...) {
             return RpcError::internalError(req.id);
         }
+#endif
     }
 
 #if RPC_ENABLE_BATCH

@@ -14,7 +14,11 @@
  * 4. Send HTTP POST requests to http://YOUR_IP:8080
  */
 
+#if defined(ESP8266)
+#include <ESP8266WiFi.h>
+#else
 #include <WiFi.h>
+#endif
 #include <RpcServer.h>
 #include <RpcHttpServerTransport.h>
 
@@ -56,11 +60,7 @@ JsonVariant makeNumberResult(float value) {
 }
 
 WiFiClient acceptRpcClient() {
-#if defined(ESP32)
     return server.accept();
-#else
-    return server.available();
-#endif
 }
 
 void setup() {
