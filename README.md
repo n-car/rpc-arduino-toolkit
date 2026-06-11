@@ -371,9 +371,9 @@ resp = rpc.call("__rpc.capabilities");
 **Features:**
 - Automatically available on all RPC servers
 - No registration needed - built into `executeMethod()`
-- Minimal memory footprint (~800 bytes)
+- Designed for small embedded firmware builds
 - Usable by standard JSON-RPC clients
-- Description metadata support optional (can be disabled to save ~200 bytes per method)
+- Description metadata support optional; disable `RPC_ENABLE_SCHEMA_SUPPORT` when metadata is not needed
 
 **Register methods with description metadata:**
 
@@ -483,8 +483,8 @@ rpc.addMethod("answer", []() -> JsonVariant {
 
 ```cpp
 // In RpcConfig.h or build flags
-#define RPC_ENABLE_SAFE_MODE 0      // Disable safe mode (save ~1KB)
-#define RPC_ENABLE_SCHEMA_SUPPORT 0 // Disable description metadata (save ~200B/method)
+#define RPC_ENABLE_SAFE_MODE 0      // Disable Safe Mode helpers and HTTP encoding
+#define RPC_ENABLE_SCHEMA_SUPPORT 0 // Disable description metadata storage
 #define RPC_MAX_METHOD_NAME 16      // Limit method name length
 ```
 
@@ -615,16 +615,38 @@ See `examples/SafeMode/` for complete example.
 
 ## Memory Usage
 
-| Platform | Flash (Code) | RAM (Static) | RAM (Runtime) | Features |
-|----------|--------------|--------------|---------------|----------|
-| ESP32 | ~12KB | ~300B | ~1KB | Full |
-| ESP8266 | ~10KB | ~250B | ~800B | Full |
+Memory usage depends on the board core, ArduinoJson version, enabled feature
+flags, transport, registered methods, JSON document sizes, and surrounding
+sketch code. The table below shows representative PlatformIO build deltas from
+minimal firmware scenarios measured against a baseline sketch for the same
+board/core. These are not isolated object-file sizes for the library alone.
 
-**Feature Impact:**
-- `RPC_ENABLE_SCHEMA_SUPPORT=1`: +200 bytes per method (description metadata storage)
-- `RPC_ENABLE_SAFE_MODE=1`: +1KB Flash, +50 bytes RAM
+| Platform | Scenario | Static RAM Delta | Flash Delta |
+|----------|----------|-----------------:|------------:|
+| ESP32 `esp32dev` | JSON only | +304 B | +448 B |
+| ESP32 `esp32dev` | RPC types | +2,656 B | +3,876 B |
+| ESP32 `esp32dev` | Serial client | +2,376 B | +9,472 B |
+| ESP32 `esp32dev` | Serial server | +2,896 B | +14,728 B |
+| ESP32 `esp32dev` | HTTP client | +1,696 B | +27,520 B |
+| ESP32 `esp32dev` | HTTP server | +4,208 B | +30,892 B |
+| ESP32 `esp32dev` | Safe HTTP client | +1,696 B | +31,396 B |
+| ESP32 `esp32dev` | Safe HTTP server | +4,208 B | +33,588 B |
+| ESP8266 `nodemcuv2` | JSON only | +316 B | +516 B |
+| ESP8266 `nodemcuv2` | RPC types | +1,832 B | +3,856 B |
+| ESP8266 `nodemcuv2` | Serial client | +1,712 B | +9,928 B |
+| ESP8266 `nodemcuv2` | Serial server | +2,632 B | +14,168 B |
+| ESP8266 `nodemcuv2` | HTTP client | +1,252 B | +21,560 B |
+| ESP8266 `nodemcuv2` | HTTP server | +2,924 B | +23,768 B |
+| ESP8266 `nodemcuv2` | Safe HTTP client | +1,332 B | +24,200 B |
+| ESP8266 `nodemcuv2` | Safe HTTP server | +2,924 B | +25,600 B |
 
-*Note: Values depend on enabled features and registered methods*
+Representative ESP32 board-to-board runtime heap testing with Safe Mode enabled
+reported a client low-water delta of 7,596 bytes during the full interoperability
+suite and a server low-water delta of 13,108 bytes while handling 36 HTTP
+requests. ESP8266 runtime heap validation is still pending physical board tests.
+
+See [`docs/MEMORY_METRICS.md`](docs/MEMORY_METRICS.md) for the full measured
+build delta table and ESP32 runtime heap notes.
 
 ## Cross-Platform Compatibility
 
