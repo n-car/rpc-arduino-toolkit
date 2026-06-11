@@ -13,9 +13,9 @@ RPC Arduino Toolkit is an early public version. Version 1.0.0 is currently in de
 - The API may still change before the first official release.
 - GitHub installation is currently the recommended method.
 - RPC Toolkit Safe Mode HTTP interoperability is implemented and in testing.
-- Full Safe Mode release confidence still requires physical ESP32/ESP8266 interoperability testing.
+- Full Safe Mode release confidence still requires captured ESP32/ESP8266 interoperability evidence.
 - Safe Mode interoperability test coverage is tracked in [`docs/SAFE_MODE_INTEROPERABILITY_TEST_PLAN.md`](docs/SAFE_MODE_INTEROPERABILITY_TEST_PLAN.md).
-- First-release gates are API finalization, physical ESP32/ESP8266 Safe Mode validation, dependency compatibility review, and a tagged GitHub release.
+- First-release gates are API finalization, captured ESP32/ESP8266 Safe Mode validation, dependency compatibility review, and a tagged GitHub release.
 - Arduino Library Manager and PlatformIO Registry publication are planned after the first official release is ready.
 
 ## Features
@@ -498,7 +498,7 @@ Safe Mode helper utilities are available for explicit string/date/bigint marker 
 
 `rpc-arduino-toolkit` is interoperable with standard JSON-RPC 2.0 clients and servers by default. When `RPC_ENABLE_SAFE_MODE=1`, HTTP transports use the same Safe Mode conventions as `rpc-express-toolkit`, including `X-RPC-Safe-Enabled` negotiation and recursive params/result encode/decode.
 
-Full Safe Mode release confidence still requires physical ESP32/ESP8266 interoperability tests against the other RPC Toolkit implementations before the first official release.
+Full Safe Mode release confidence still requires captured ESP32/ESP8266 interoperability results against the other RPC Toolkit implementations before the first official release.
 
 Schema validation is planned as an optional layer. The goal is to let endpoints describe expected params and results, optionally validate calls, and preserve type intent when Safe Mode is enabled.
 
@@ -628,7 +628,7 @@ See `examples/SafeMode/` for complete example.
 
 ## Cross-Platform Compatibility
 
-Designed to work with standard JSON-RPC 2.0 clients and servers in the RPC Toolkit ecosystem by default. Optional HTTP Safe Mode interoperability follows the same header and value-prefix conventions used by `rpc-express-toolkit`; physical ESP32/ESP8266 validation is still required before the first official release.
+Designed to work with standard JSON-RPC 2.0 clients and servers in the RPC Toolkit ecosystem by default. Optional HTTP Safe Mode interoperability follows the same header and value-prefix conventions used by `rpc-express-toolkit`; captured ESP32/ESP8266 validation evidence is still required before the first official release.
 
 The Safe Mode interoperability test plan is maintained in [`docs/SAFE_MODE_INTEROPERABILITY_TEST_PLAN.md`](docs/SAFE_MODE_INTEROPERABILITY_TEST_PLAN.md).
 
@@ -864,7 +864,7 @@ pio test -e native
 - [x] Safe Mode interoperability test plan
 - [x] Focused Safe Mode marker-like string round-trip test sketch
 - [x] Basic examples for Serial, WiFi, introspection, and Safe Mode
-- [ ] Physical ESP32/ESP8266 Safe Mode interoperability validation
+- [ ] Capture ESP32/ESP8266 Safe Mode interoperability validation evidence
 - [ ] Review dependency compatibility before declaring final ArduinoJson support range
 - [ ] Finalize public API before official release
 - [ ] Publish first GitHub release
