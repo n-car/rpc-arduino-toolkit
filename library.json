@@ -1,5 +1,5 @@
 {
-  "name": "RPC Arduino Toolkit",
+  "name": "RPCToolkit",
   "version": "1.0.0",
   "description": "Lightweight JSON-RPC 2.0 client and server for Arduino, ESP32, ESP8266 with multiple transport options",
   "keywords": [

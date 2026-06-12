@@ -1,5 +1,5 @@
 /**
- * RPC Arduino Toolkit - Core Types
+ * RPCToolkit - Core Types
  */
 
 #ifndef RPC_TYPES_H

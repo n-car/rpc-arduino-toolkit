@@ -1,5 +1,5 @@
 /**
- * RPC Arduino Toolkit - Introspection Example
+ * RPCToolkit - Introspection Example
  *
  * This example demonstrates the built-in introspection methods
  * that allow clients to discover available RPC methods.

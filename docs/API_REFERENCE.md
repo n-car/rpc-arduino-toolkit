@@ -23,8 +23,9 @@ Prefer selective includes on constrained boards:
 #include <RpcSerialTransport.h>
 ```
 
-`RpcArduinoToolkit.h` remains available as a convenience umbrella header, but
-examples use selective includes by default.
+`RPCToolkit.h` is the convenience umbrella header that matches the package name.
+`RpcArduinoToolkit.h` remains available for compatibility. Examples use
+selective includes by default.
 
 ## RpcServer
 

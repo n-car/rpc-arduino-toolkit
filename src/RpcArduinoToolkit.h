@@ -1,12 +1,13 @@
 /**
- * RPC Arduino Toolkit - Main Header
+ * RPCToolkit - Legacy Convenience Header
  * 
- * Convenience umbrella header.
+ * Compatibility umbrella header kept for sketches that used the repository
+ * name before the Arduino/PlatformIO package name was finalized.
  *
  * Prefer including only the headers required by a sketch, such as
  * RpcClient.h plus a transport for clients or RpcServer.h plus a transport
- * for servers. Include this file only when a sketch intentionally wants the
- * full toolkit surface.
+ * for servers. New sketches that need the full toolkit surface can include
+ * RPCToolkit.h.
  */
 
 #ifndef RPC_ARDUINO_TOOLKIT_H
@@ -25,10 +26,6 @@
 // Platform-specific transports
 #if RPC_HAS_WIFI
   #include "RpcWiFiTransport.h"
-#endif
-
-#if RPC_HAS_BLE
-  #include "RpcBLETransport.h"
 #endif
 
 #endif // RPC_ARDUINO_TOOLKIT_H

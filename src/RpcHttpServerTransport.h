@@ -1,5 +1,5 @@
 /**
- * RPC Arduino Toolkit - HTTP Server Transport
+ * RPCToolkit - HTTP Server Transport
  *
  * Server-side JSON-RPC transport over an Arduino Client-compatible socket.
  * Works with WiFiClient, EthernetClient, and other Client implementations.

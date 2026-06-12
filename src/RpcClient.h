@@ -1,5 +1,5 @@
 /**
- * RPC Arduino Toolkit - Client Implementation
+ * RPCToolkit - Client Implementation
  */
 
 #ifndef RPC_CLIENT_H

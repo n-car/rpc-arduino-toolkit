@@ -1,5 +1,5 @@
 /**
- * RPC Arduino Toolkit - Safe Mode Interoperability Test
+ * RPCToolkit - Safe Mode Interoperability Test
  *
  * Compile with:
  *   -DRPC_ENABLE_SAFE_MODE=1

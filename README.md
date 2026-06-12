@@ -1,14 +1,14 @@
-# RPC Arduino Toolkit
+# RPCToolkit
 
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Arduino](https://img.shields.io/badge/Arduino-Compatible-green.svg)](https://www.arduino.cc/)
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-Compatible-orange.svg)](https://platformio.org/)
 
-Lightweight JSON-RPC 2.0 client and server library for Arduino, ESP32, ESP8266, and other embedded platforms. Part of the RPC Toolkit ecosystem for compatible JSON-RPC integrations.
+Lightweight JSON-RPC 2.0 client and server library for Arduino, ESP32, ESP8266, and other embedded platforms. Published as `RPCToolkit` for Arduino and PlatformIO, from the `rpc-arduino-toolkit` repository. Part of the RPC Toolkit ecosystem for compatible JSON-RPC integrations.
 
 ## Project Status
 
-RPC Arduino Toolkit is an early public version. Version 1.0.0 is currently in development as the initial public release candidate.
+RPCToolkit is an early public version. Version 1.0.0 is currently in development as the initial public release candidate.
 
 - The API may still change before the first official release.
 - GitHub installation is currently the recommended method.
@@ -62,7 +62,7 @@ These are the main points to check before using the library in an application:
 - Standard JSON-RPC 2.0 is the default. RPC Toolkit Safe Mode is opt-in with `RPC_ENABLE_SAFE_MODE=1`.
 - HTTP transports are network-agnostic wrappers over Arduino `Client` sockets. Use `RpcHttpClientTransport` or `RpcHttpServerTransport` with `WiFiClient`, `EthernetClient`, or another compatible client.
 - `RpcWiFiTransport` is only a deprecated compatibility alias for older sketches. New code should use `RpcHttpServerTransport`.
-- Prefer selective includes over `RpcArduinoToolkit.h` on constrained boards.
+- Prefer selective includes over umbrella headers on constrained boards. `RPCToolkit.h` and `RpcArduinoToolkit.h` remain available for convenience.
 - Server handlers return `JsonVariant` views. Any document that owns returned data must remain alive until the response is serialized.
 - ESP8266 works, but stack and heap headroom are tighter than ESP32. Keep `RPC_MAX_REQUEST_SIZE`, response size, batch size, and local `StaticJsonDocument` instances sized for the real sketch, and measure heap/fragmentation on hardware.
 - ArduinoJson has no native JavaScript `Date` or `BigInt` value types. Safe Mode date and BigInt markers are preserved as strings unless your sketch explicitly parses them.
@@ -75,14 +75,14 @@ The library is not yet published in Arduino Library Manager. Until the first off
 
 1. Download the repository ZIP from GitHub using **Code > Download ZIP**.
 2. Extract it into your Arduino sketchbook `libraries` directory.
-3. Rename the extracted folder to `RpcArduinoToolkit` if needed.
+3. Rename the extracted folder to `RPCToolkit` if needed.
 4. Restart Arduino IDE.
 
 You can also clone the repository directly:
 
 ```bash
 cd ~/Arduino/libraries
-git clone https://github.com/n-car/rpc-arduino-toolkit.git RpcArduinoToolkit
+git clone https://github.com/n-car/rpc-arduino-toolkit.git RPCToolkit
 ```
 
 On Windows, the sketchbook libraries directory is usually `Documents/Arduino/libraries`.
@@ -123,7 +123,7 @@ For Arduino sketches, prefer including only the client, server, and transport he
 #include <RpcSerialTransport.h>
 ```
 
-`RpcArduinoToolkit.h` remains available as a convenience umbrella header, but examples use selective includes by default.
+`RPCToolkit.h` matches the package name and includes `RpcArduinoToolkit.h`. `RpcArduinoToolkit.h` remains available for compatibility. Examples use selective includes by default.
 
 ## Quick Start
 
@@ -545,4 +545,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**RPC Arduino Toolkit** - JSON-RPC 2.0 for embedded projects.
+**RPCToolkit** - JSON-RPC 2.0 for embedded projects.

@@ -1,8 +1,8 @@
 # Examples
 
-This directory contains example sketches demonstrating the RPC Arduino Toolkit.
+This directory contains example sketches demonstrating RPCToolkit.
 
-Examples intentionally use selective includes instead of `RpcArduinoToolkit.h` so sketches only pull the client, server, and transport pieces they use.
+Examples intentionally use selective includes instead of umbrella headers such as `RPCToolkit.h` or `RpcArduinoToolkit.h` so sketches only pull the client, server, and transport pieces they use.
 
 ## Available Examples
 
@@ -66,7 +66,7 @@ For HTTP interoperability testing against `rpc-express-toolkit` Safe Mode, see `
 ## Running Examples
 
 ### Arduino IDE
-1. Open File > Examples > RPC Arduino Toolkit
+1. Open File > Examples > RPCToolkit
 2. Select the example you want
 3. Upload to your board
 

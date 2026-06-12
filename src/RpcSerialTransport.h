@@ -1,5 +1,5 @@
 /**
- * RPC Arduino Toolkit - Serial Transport
+ * RPCToolkit - Serial Transport
  * 
  * Transport over Serial/UART
  */

@@ -1,5 +1,5 @@
 /**
- * RPC Arduino Toolkit - Server Implementation
+ * RPCToolkit - Server Implementation
  */
 
 #ifndef RPC_SERVER_H

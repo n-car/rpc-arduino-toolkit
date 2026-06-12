@@ -1,5 +1,5 @@
 /**
- * RPC Arduino Toolkit - Safe Mode Example
+ * RPCToolkit - Safe Mode Example
  *
  * This example demonstrates safe serialization with S: prefixes for strings,
  * D: prefixes for dates/timestamps, and 'n' suffixes for large integers.

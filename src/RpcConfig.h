@@ -1,5 +1,5 @@
 /**
- * RPC Arduino Toolkit - Configuration
+ * RPCToolkit - Configuration
  * 
  * Adjust these settings based on your platform and requirements
  */

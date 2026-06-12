@@ -1,5 +1,5 @@
 /**
- * RPC Arduino Toolkit - Transport Layer
+ * RPCToolkit - Transport Layer
  * 
  * Abstract base class for different transport mechanisms
  */

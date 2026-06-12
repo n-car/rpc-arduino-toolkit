@@ -1,5 +1,5 @@
 /**
- * RPC Arduino Toolkit - WiFi HTTP Client Example
+ * RPCToolkit - WiFi HTTP Client Example
  *
  * Calls a JSON-RPC HTTP endpoint over WiFi from ESP32 or ESP8266.
  *

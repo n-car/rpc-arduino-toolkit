@@ -1,5 +1,5 @@
 /**
- * RPC Arduino Toolkit - Deprecated WiFi Transport Name
+ * RPCToolkit - Deprecated WiFi Transport Name
  *
  * Use RpcHttpServerTransport for new code. This wrapper is kept for sketches
  * that used the old WiFi-specific name before the HTTP transport was renamed.
