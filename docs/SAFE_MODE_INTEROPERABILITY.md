@@ -1,6 +1,6 @@
-# Safe Mode Interoperability Test Plan
+# Safe Mode Interoperability
 
-This plan tracks `rpc-arduino-toolkit` interoperability with `rpc-express-toolkit` Safe Mode endpoints.
+This document describes `rpc-arduino-toolkit` Safe Mode behavior, interoperability expectations, physical validation evidence, and release validation checks.
 
 `rpc-express-toolkit` is the reference implementation for HTTP Safe Mode behavior in these tests. The Arduino library must remain standard JSON-RPC 2.0 compatible by default, and Safe Mode must only affect HTTP requests/responses when it is explicitly enabled.
 
@@ -26,7 +26,8 @@ Not covered in this pass:
 Status terms used below:
 - **Covered by sketch**: exercised by a public Arduino example/test sketch, but not necessarily over HTTP.
 - **Physical evidence needed**: the test requires ESP32/ESP8266 hardware and a live Node.js endpoint; capture serial/LAN logs and pass/fail summary before treating it as release evidence.
-- **ESP32 validated**: exercised on a physical ESP32 over WiFi/HTTP against a live `rpc-express-toolkit` Safe Mode endpoint.
+- **ESP32 reference validated**: exercised on a physical ESP32 over WiFi/HTTP against a live `rpc-express-toolkit` Safe Mode endpoint.
+- **ESP8266 client board-to-board validated**: exercised on a physical ESP8266EX HTTP client over WiFi/HTTP against an ESP32 Arduino HTTP server with Safe Mode enabled.
 - **Implementation difference**: behavior is intentionally different between JavaScript and Arduino because ArduinoJson has no native `Date` or `BigInt` value types.
 
 ## Protocol Expectations
@@ -48,15 +49,23 @@ Status terms used below:
 
 Captured ESP32 validation:
 - Date: 2026-06-11.
-- Board: ESP32 connected over serial as COM11 during development testing.
-- Device IP during the captured run: `192.168.10.180`.
+- Board: physical ESP32 over WiFi/HTTP.
 - Arduino HTTP client -> Node `RpcSafeEndpoint`: `SUMMARY pass=21 fail=0 gap=0`.
 - Node `RpcSafeClient` -> Arduino HTTP server: `SUMMARY pass=21 fail=0 gap=0`.
-- ESP8266 physical validation is still pending.
+
+Captured ESP8266 client board-to-board validation:
+- Date: 2026-06-12.
+- Client board: ESP8266EX running the Arduino HTTP client interoperability firmware.
+- Server board: ESP32 running the Arduino HTTP server interoperability firmware.
+- Safe Mode enabled on both firmware projects.
+- ESP8266 HTTP client -> ESP32 Arduino HTTP server: `SUMMARY pass=21 fail=0 gap=0`.
+- Client heap snapshots: 47,480 bytes free heap at suite start, 45,928 bytes at suite end, fragmentation from 1% to 5%.
+
+ESP8266 reference validation against `rpc-express-toolkit` should still be rerun before registry publication if the release notes claim full ESP8266 reference interoperability.
 
 ### Node.js Safe Endpoint
 
-Use `rpc-express-toolkit/safe` so the Node side is the Safe Mode reference implementation. The current reference version used for this plan is `rpc-express-toolkit` 4.3.x or later.
+Use `rpc-express-toolkit/safe` so the Node side is the Safe Mode reference implementation. The current reference version used for these checks is `rpc-express-toolkit` 4.3.x or later.
 
 Prefer `new RpcSafeEndpoint(...)`; `createSafeEndpoint(...)` is kept by `rpc-express-toolkit` for compatibility but is deprecated.
 
@@ -185,25 +194,25 @@ Not covered by this sketch:
 
 | ID | Direction | Case | Expected Result | Status |
 | --- | --- | --- | --- | --- |
-| SM-01 | Arduino HTTP client -> Node `RpcSafeEndpoint` | `ping` with no params | Result is `pong`; request and response include Safe Mode header | ESP32 validated; ESP8266 pending |
-| SM-02 | Arduino HTTP client -> Node `RpcSafeEndpoint` | Recursive object/array params through `echo` | Nested strings decode without `S:` prefix; arrays/objects preserve shape | ESP32 validated; ESP8266 pending |
-| SM-03 | Arduino HTTP client -> Node `RpcSafeEndpoint` | Strings beginning with `S:` and `D:` | Literal prefixes are sent as `S:S:...` and `S:D:...` on the wire and round-trip as string values | ESP32 validated; ESP8266 pending |
-| SM-04 | Arduino HTTP client -> Node `RpcSafeEndpoint` | ISO date string param | Value remains an ISO string on Arduino; Node may hydrate Date only for `D:` markers | ESP32 validated; ESP8266 pending |
-| SM-05 | Arduino HTTP client -> Node `RpcSafeEndpoint` | BigInt-looking string ending in `n` | Literal string is sent as `S:9007199254740993n` and round-trips as a string, not JavaScript `BigInt` | ESP32 validated; ESP8266 pending |
-| SM-06 | Arduino HTTP client -> Node `RpcSafeEndpoint` | JSON-RPC application error with `error.data` | Arduino receives error code/message and decoded nested `error.data` | ESP32 validated; ESP8266 pending |
-| SM-07 | Arduino HTTP client -> Node `RpcSafeEndpoint` | Batch with success, domain error, and method-not-found | `RpcBatchResponse` exposes each item in order; error items keep code/message/data | ESP32 validated; ESP8266 pending |
-| SM-08 | Arduino HTTP client -> Node `RpcSafeEndpoint` | Notification `notify.record` | No response body is required; follow-up `notify.stats` confirms execution | ESP32 validated; ESP8266 pending |
-| SM-09 | Node `RpcSafeClient` -> Arduino HTTP server | `ping` with no params | Result is `pong`; request and response include Safe Mode header | ESP32 validated; ESP8266 pending |
-| SM-10 | Node `RpcSafeClient` -> Arduino HTTP server | Recursive object/array params through `echo` | Arduino decodes params recursively; Node receives recursively encoded result | ESP32 validated; ESP8266 pending |
-| SM-11 | Node `RpcSafeClient` -> Arduino HTTP server | Strings beginning with `S:` and `D:` | Literal prefixes arrive as string values after one `S:` layer is decoded | ESP32 validated; ESP8266 pending |
-| SM-12 | Node `RpcSafeClient` -> Arduino HTTP server | ISO date string param | Arduino sees a string; it does not create a Date object | ESP32 validated; ESP8266 pending |
-| SM-13 | Node `RpcSafeClient` -> Arduino HTTP server | BigInt value and BigInt-looking string | Arduino stores both as strings in generic JSON; literal BigInt-looking strings must remain strings when echoed | ESP32 validated; ESP8266 pending |
-| SM-14 | Node `RpcSafeClient` -> Arduino HTTP server | JSON-RPC application error with `error.data` | Node receives decoded `error.data` from Arduino response | ESP32 validated; ESP8266 pending |
-| SM-15 | Node `RpcSafeClient` -> Arduino HTTP server | Batch with success, error, and notification | Response includes only calls with ids; notification executes without response entry | ESP32 validated; ESP8266 pending |
-| SM-16 | Node standard `RpcClient` or raw client -> Safe Mode server | `safe=false` client with header `false` | Server accepts request because header is present; response header reports server Safe Mode state | ESP32 validated; ESP8266 pending |
-| SM-17 | Raw HTTP client -> strict Safe Mode server | Missing `X-RPC-Safe-Enabled` header, request with id | JSON-RPC error `-32600` with compatibility message. Node includes diagnostic `error.data`; Arduino currently does not. | ESP32 validated; ESP8266 pending |
-| SM-18 | Raw HTTP client -> strict Safe Mode server | Missing header notification | HTTP `204 No Content` or otherwise empty body; method must not return a JSON-RPC response body | ESP32 validated; ESP8266 pending |
-| SM-19 | Raw HTTP client -> strict Safe Mode server | Missing header batch with ids and notifications | Error entries for calls with ids; no entries for notifications. Node entries include diagnostic `error.data`; Arduino entries currently do not. | ESP32 validated; ESP8266 pending |
+| SM-01 | Arduino HTTP client -> Node `RpcSafeEndpoint` | `ping` with no params | Result is `pong`; request and response include Safe Mode header | ESP32 reference validated; ESP8266 reference rerun pending |
+| SM-02 | Arduino HTTP client -> Node `RpcSafeEndpoint` | Recursive object/array params through `echo` | Nested strings decode without `S:` prefix; arrays/objects preserve shape | ESP32 reference validated; ESP8266 reference rerun pending |
+| SM-03 | Arduino HTTP client -> Node `RpcSafeEndpoint` | Strings beginning with `S:` and `D:` | Literal prefixes are sent as `S:S:...` and `S:D:...` on the wire and round-trip as string values | ESP32 reference validated; ESP8266 reference rerun pending |
+| SM-04 | Arduino HTTP client -> Node `RpcSafeEndpoint` | ISO date string param | Value remains an ISO string on Arduino; Node may hydrate Date only for `D:` markers | ESP32 reference validated; ESP8266 reference rerun pending |
+| SM-05 | Arduino HTTP client -> Node `RpcSafeEndpoint` | BigInt-looking string ending in `n` | Literal string is sent as `S:9007199254740993n` and round-trips as a string, not JavaScript `BigInt` | ESP32 reference validated; ESP8266 reference rerun pending |
+| SM-06 | Arduino HTTP client -> Node `RpcSafeEndpoint` | JSON-RPC application error with `error.data` | Arduino receives error code/message and decoded nested `error.data` | ESP32 reference validated; ESP8266 reference rerun pending |
+| SM-07 | Arduino HTTP client -> Node `RpcSafeEndpoint` | Batch with success, domain error, and method-not-found | `RpcBatchResponse` exposes each item in order; error items keep code/message/data | ESP32 reference validated; ESP8266 reference rerun pending |
+| SM-08 | Arduino HTTP client -> Node `RpcSafeEndpoint` | Notification `notify.record` | No response body is required; follow-up `notify.stats` confirms execution | ESP32 reference validated; ESP8266 reference rerun pending |
+| SM-09 | Node `RpcSafeClient` -> Arduino HTTP server | `ping` with no params | Result is `pong`; request and response include Safe Mode header | ESP32 reference validated; ESP8266 server runtime pending |
+| SM-10 | Node `RpcSafeClient` -> Arduino HTTP server | Recursive object/array params through `echo` | Arduino decodes params recursively; Node receives recursively encoded result | ESP32 reference validated; ESP8266 server runtime pending |
+| SM-11 | Node `RpcSafeClient` -> Arduino HTTP server | Strings beginning with `S:` and `D:` | Literal prefixes arrive as string values after one `S:` layer is decoded | ESP32 reference validated; ESP8266 server runtime pending |
+| SM-12 | Node `RpcSafeClient` -> Arduino HTTP server | ISO date string param | Arduino sees a string; it does not create a Date object | ESP32 reference validated; ESP8266 server runtime pending |
+| SM-13 | Node `RpcSafeClient` -> Arduino HTTP server | BigInt value and BigInt-looking string | Arduino stores both as strings in generic JSON; literal BigInt-looking strings must remain strings when echoed | ESP32 reference validated; ESP8266 server runtime pending |
+| SM-14 | Node `RpcSafeClient` -> Arduino HTTP server | JSON-RPC application error with `error.data` | Node receives decoded `error.data` from Arduino response | ESP32 reference validated; ESP8266 server runtime pending |
+| SM-15 | Node `RpcSafeClient` -> Arduino HTTP server | Batch with success, error, and notification | Response includes only calls with ids; notification executes without response entry | ESP32 reference validated; ESP8266 server runtime pending |
+| SM-16 | Node standard `RpcClient` or raw client -> Safe Mode server | `safe=false` client with header `false` | Server accepts request because header is present; response header reports server Safe Mode state | ESP32 reference validated; ESP8266 server runtime pending |
+| SM-17 | Raw HTTP client -> strict Safe Mode server | Missing `X-RPC-Safe-Enabled` header, request with id | JSON-RPC error `-32600` with compatibility message. Node includes diagnostic `error.data`; Arduino currently does not. | ESP32 reference validated; ESP8266 server runtime pending |
+| SM-18 | Raw HTTP client -> strict Safe Mode server | Missing header notification | HTTP `204 No Content` or otherwise empty body; method must not return a JSON-RPC response body | ESP32 reference validated; ESP8266 server runtime pending |
+| SM-19 | Raw HTTP client -> strict Safe Mode server | Missing header batch with ids and notifications | Error entries for calls with ids; no entries for notifications. Node entries include diagnostic `error.data`; Arduino entries currently do not. | ESP32 reference validated; ESP8266 server runtime pending |
 | SM-20 | Arduino local sketch | Recursive Safe Mode encode/decode | `SafeModeInteropTest` prints `PASS` | Covered by sketch |
 | SM-21 | Arduino local sketch | Literal `S:` / `D:` / `n` marker-like strings | Strings are protected by `S:` during encoding and round-trip as strings | Covered by sketch |
 | SM-22 | Arduino local sketch | Actual `D:` and BigInt markers from peers | Date marker loses `D:` prefix and remains a string; BigInt marker remains a string with `n` | Covered by sketch |
@@ -358,6 +367,7 @@ Expected:
 
 Before claiming full Safe Mode interoperability in registry publication:
 - Rerun the full ESP32 matrix when preparing the release artifact and save serial/LAN logs with the result summary.
-- Capture or rerun at least HTTP client and HTTP server smoke tests on ESP8266.
+- Rerun ESP8266 HTTP client checks against the `rpc-express-toolkit` reference endpoint if claiming ESP8266 reference interoperability.
+- Capture ESP8266 HTTP server runtime evidence if claiming ESP8266 server runtime coverage.
 - Capture firmware commit, `rpc-express-toolkit` version/commit, board model, Arduino core/platform version, and pass/fail summary.
 - Confirm marker-like literal strings pass both Arduino-client-to-Node and Node-client-to-Arduino echo tests.

@@ -3,6 +3,8 @@
  *
  * This example demonstrates safe serialization with S: prefixes for strings,
  * D: prefixes for dates/timestamps, and 'n' suffixes for large integers.
+ * It runs over Serial, so it demonstrates helper usage but not HTTP
+ * X-RPC-Safe-Enabled negotiation.
  *
  * To enable safe mode, define RPC_ENABLE_SAFE_MODE=1 in RpcConfig.h
  * or add build flag: -DRPC_ENABLE_SAFE_MODE=1

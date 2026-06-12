@@ -63,6 +63,16 @@ WiFiClient acceptRpcClient() {
     return server.accept();
 }
 
+const char* platformName() {
+#if defined(ESP8266)
+    return "ESP8266";
+#elif defined(ESP32)
+    return "ESP32";
+#else
+    return "Arduino";
+#endif
+}
+
 void setup() {
     Serial.begin(115200);
     delay(1000);
@@ -165,7 +175,7 @@ void registerMethods() {
     // Get device info
     rpc.addMethod("getInfo", []() -> JsonVariant {
         rpcResultDoc.clear();
-        rpcResultDoc["device"] = "ESP32";
+        rpcResultDoc["device"] = platformName();
         rpcResultDoc["firmware"] = "1.0.0";
         rpcResultDoc["uptime"] = millis();
         rpcResultDoc["freeHeap"] = ESP.getFreeHeap();

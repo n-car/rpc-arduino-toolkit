@@ -1,7 +1,9 @@
 # Memory Metrics
 
-Measured on 2026-06-11 with PlatformIO build scenarios and physical ESP32
-board-to-board heap testing.
+Measured with PlatformIO build scenarios and physical WiFi/HTTP heap testing:
+
+- 2026-06-11: build deltas and ESP32 board-to-board heap testing.
+- 2026-06-12: ESP8266EX HTTP client heap testing against an ESP32 Arduino HTTP server.
 
 These values are intended as representative engineering measurements, not fixed
 guarantees. Actual memory usage depends on the board core, ArduinoJson version,
@@ -92,11 +94,40 @@ Server heap:
 | HTTP requests during suite | 36 |
 | Low-water delta from after-WiFi free heap | 13,108 B |
 
+## ESP8266 Runtime Heap
+
+Runtime heap was measured on a physical ESP8266EX running the WiFi HTTP client
+interoperability firmware against an ESP32 Arduino HTTP server with Safe Mode
+enabled.
+
+Client-side full suite result:
+
+```text
+SUMMARY pass=21 fail=0 gap=0
+```
+
+Client heap:
+
+| Metric | Value |
+| --- | ---: |
+| Suite start free heap | 47,480 B |
+| Suite start max free block | 47,032 B |
+| Suite start fragmentation | 1% |
+| Suite end free heap | 45,928 B |
+| Suite end max free block | 44,040 B |
+| Suite end fragmentation | 5% |
+| Free heap delta during suite | 1,552 B |
+
+ESP8266 does not expose the same `minFree` and heap-size APIs as ESP32 in this
+test sketch, so the table records the serial snapshots printed by the firmware
+before and after the suite.
+
 ## Current Limitations
 
-- ESP8266 values above are compile/link metrics only; physical runtime heap
-  validation is still pending.
 - Runtime heap values include Arduino core, WiFi stack, ArduinoJson, test code,
   Serial logging, Safe Mode, schema metadata on the server, and test methods.
 - Build deltas are useful for trend comparisons, but application firmware should
   still be measured with its real methods, documents, and transports.
+- The captured ESP8266 runtime result covers the HTTP client path. ESP8266 HTTP
+  server applications should still be measured on the target board with their
+  real handlers and response sizes.

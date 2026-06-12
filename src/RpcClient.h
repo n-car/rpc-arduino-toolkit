@@ -66,10 +66,18 @@ private:
             return params;
         }
 
+#if defined(ESP8266)
+        DynamicJsonDocument source(RPC_JSON_DOC_SIZE);
+#else
         StaticJsonDocument<RPC_JSON_DOC_SIZE> source;
+#endif
         DeserializationError error = deserializeJson(source, params);
         if (!error) {
+#if defined(ESP8266)
+            DynamicJsonDocument encoded(RPC_JSON_DOC_SIZE);
+#else
             StaticJsonDocument<RPC_JSON_DOC_SIZE> encoded;
+#endif
             RpcSafe::encodeValue(source.as<JsonVariantConst>(), encoded.to<JsonVariant>());
 
             String output;
@@ -81,13 +89,21 @@ private:
     }
 
     static String encodeBatchForRequest(const String& batch) {
+#if defined(ESP8266)
+        DynamicJsonDocument source(RPC_JSON_DOC_SIZE);
+#else
         StaticJsonDocument<RPC_JSON_DOC_SIZE> source;
+#endif
         DeserializationError error = deserializeJson(source, batch);
         if (error || !source.is<JsonArray>()) {
             return batch;
         }
 
+#if defined(ESP8266)
+        DynamicJsonDocument encoded(RPC_JSON_DOC_SIZE);
+#else
         StaticJsonDocument<RPC_JSON_DOC_SIZE> encoded;
+#endif
         JsonArray outputBatch = encoded.to<JsonArray>();
 
         for (JsonVariantConst item : source.as<JsonArrayConst>()) {

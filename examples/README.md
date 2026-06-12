@@ -13,7 +13,7 @@ Simple RPC server that communicates over Serial. Demonstrates:
 - Analog pin reading
 - Status reporting
 
-**Hardware:** Any Arduino board
+**Hardware:** Arduino-compatible board with C++ `std::function` support
 
 **Usage:** Open Serial Monitor, send JSON-RPC commands
 
@@ -23,7 +23,7 @@ RPC client that calls methods on a remote server via Serial. Demonstrates:
 - Handling responses
 - Error handling
 
-**Hardware:** Any Arduino board
+**Hardware:** Arduino-compatible board with C++ `std::function` support
 
 **Usage:** Connect to BasicServer via Serial
 
@@ -37,8 +37,18 @@ HTTP-based RPC server with WiFi. Demonstrates:
 
 **Usage:** Access via HTTP POST to device IP
 
-### HTTP Client
-Use `RpcHttpClientTransport` with `WiFiClient`, `EthernetClient`, or another Arduino `Client` implementation to call remote JSON-RPC HTTP endpoints.
+### WiFiHttpClient (ESP32/ESP8266)
+HTTP-based RPC client with WiFi. Demonstrates:
+- WiFi connectivity
+- `RpcHttpClientTransport`
+- Standard JSON-RPC calls to a remote HTTP endpoint
+- HTTP/RPC error reporting
+
+**Hardware:** ESP32 or ESP8266
+
+**Usage:** Update WiFi credentials and the remote JSON-RPC endpoint, then upload. The example calls `ping` and `add`; change those calls if your server exposes different methods. Compile with `RPC_ENABLE_SAFE_MODE=1` only when the remote endpoint supports RPC Toolkit Safe Mode.
+
+`RpcHttpClientTransport` works with `WiFiClient`, `EthernetClient`, or another Arduino `Client` implementation.
 
 ### Introspection
 Demonstrates built-in `__rpc.*` methods, including method listing, version metadata, description metadata, and capabilities.
@@ -46,10 +56,12 @@ Demonstrates built-in `__rpc.*` methods, including method listing, version metad
 ### SafeMode
 Demonstrates optional RPC Toolkit Safe Mode helper utilities and value-prefix conventions. HTTP transports perform Safe Mode header negotiation when `RPC_ENABLE_SAFE_MODE=1`; Serial examples do not require headers.
 
+Safe Mode preserves marker intent over JSON, but ArduinoJson values remain JSON values. Date markers and BigInt markers are exposed as strings unless the sketch explicitly parses them with helper APIs.
+
 ### SafeModeInteropTest
 Focused compile/runtime sketch for automatic Safe Mode source-datatype encoding. It verifies that normal strings starting with `S:`, `D:`, or ending with `n` are protected by the `S:` string prefix and round-trip as strings.
 
-For HTTP interoperability testing against `rpc-express-toolkit` Safe Mode, see `../docs/SAFE_MODE_INTEROPERABILITY_TEST_PLAN.md`.
+For HTTP interoperability testing against `rpc-express-toolkit` Safe Mode, see `../docs/SAFE_MODE_INTEROPERABILITY.md`.
 
 ## Running Examples
 
@@ -59,10 +71,9 @@ For HTTP interoperability testing against `rpc-express-toolkit` Safe Mode, see `
 3. Upload to your board
 
 ### PlatformIO
-```bash
-cd examples/BasicServer
-pio run --target upload
-```
+Create a PlatformIO project for your board, add the GitHub `lib_deps` entry from the main README, and copy or open the example sketch you want to run.
+
+For quick compile checks against a local checkout, use `pio ci` with the target board and the library path.
 
 ## Example JSON-RPC Commands
 

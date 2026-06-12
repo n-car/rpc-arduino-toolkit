@@ -96,10 +96,11 @@ private:
 
     bool readBodyByLength(size_t contentLength, unsigned long start) {
         responseBody.reserve(contentLength < RPC_MAX_RESPONSE_SIZE ? contentLength : RPC_MAX_RESPONSE_SIZE);
+        unsigned long lastProgress = millis();
 
         while (responseBody.length() < contentLength && millis() - start < timeout) {
             if (!client.available()) {
-                if (!client.connected()) {
+                if (!client.connected() && millis() - lastProgress > 250) {
                     break;
                 }
                 delay(1);
@@ -109,6 +110,12 @@ private:
             if (!appendResponseChar(client.read())) {
                 return false;
             }
+            lastProgress = millis();
+#if defined(ESP8266)
+            if ((responseBody.length() & 0x3f) == 0) {
+                delay(0);
+            }
+#endif
         }
 
         if (responseBody.length() < contentLength) {

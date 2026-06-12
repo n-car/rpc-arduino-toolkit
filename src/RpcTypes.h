@@ -302,15 +302,28 @@ public:
 
 class RpcResponse {
 private:
+#if defined(ESP8266)
+    DynamicJsonDocument doc;
+#else
     StaticJsonDocument<RPC_JSON_DOC_SIZE> doc;
+#endif
     bool _hasError;
     bool _isValid;
 
 public:
-    RpcResponse() : _hasError(false), _isValid(false) {}
+    RpcResponse()
+#if defined(ESP8266)
+        : doc(RPC_JSON_DOC_SIZE), _hasError(false), _isValid(false) {}
+#else
+        : _hasError(false), _isValid(false) {}
+#endif
 
     RpcResponse(const RpcResponse& other)
+#if defined(ESP8266)
+        : doc(RPC_JSON_DOC_SIZE), _hasError(other._hasError), _isValid(other._isValid) {
+#else
         : _hasError(other._hasError), _isValid(other._isValid) {
+#endif
         doc.set(other.doc);
     }
 
@@ -501,7 +514,11 @@ typedef std::function<RpcResponse(RpcRequest&, bool)> RpcResponseHandler;
 
 class RpcBatchResponse {
 private:
+#if defined(ESP8266)
+    DynamicJsonDocument doc;
+#else
     StaticJsonDocument<RPC_JSON_DOC_SIZE> doc;
+#endif
     bool _isValid;
     bool _isBatch;
 
@@ -519,7 +536,12 @@ private:
     }
 
 public:
-    RpcBatchResponse() : _isValid(false), _isBatch(false) {}
+    RpcBatchResponse()
+#if defined(ESP8266)
+        : doc(RPC_JSON_DOC_SIZE), _isValid(false), _isBatch(false) {}
+#else
+        : _isValid(false), _isBatch(false) {}
+#endif
 
     // Parse from JSON string. Valid batch responses are arrays; a single
     // JSON-RPC error object is accepted for invalid batch requests.
