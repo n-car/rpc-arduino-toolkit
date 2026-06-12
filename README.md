@@ -16,7 +16,7 @@ RPCToolkit 1.0.0 is prepared as the initial public release for ESP32/ESP8266-foc
 - ESP32 Safe Mode HTTP interoperability has been physically validated against `rpc-express-toolkit`.
 - ESP8266 HTTP client behavior has been physically validated against an ESP32 Arduino HTTP server with Safe Mode enabled.
 - Safe Mode interoperability behavior and test coverage are tracked in [`docs/SAFE_MODE_INTEROPERABILITY.md`](docs/SAFE_MODE_INTEROPERABILITY.md).
-- Remaining registry-publication checks are dependency compatibility review, refreshed reference interoperability runs, and a tagged GitHub release.
+- Remaining registry-publication checks are dependency compatibility review, refreshed reference interoperability runs, and registry submission/indexing.
 
 ## Features
 
@@ -518,7 +518,6 @@ pio test -e native
 ### Registry Publication
 - [ ] Rerun reference Safe Mode interoperability checks for release artifacts
 - [ ] Review dependency compatibility before declaring final ArduinoJson support range
-- [ ] Publish tagged GitHub release
 - [ ] Arduino Library Manager publication
 - [ ] PlatformIO Registry publication
 - [ ] Bluetooth LE transport (ESP32)
