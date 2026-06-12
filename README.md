@@ -4,20 +4,19 @@
 [![Arduino](https://img.shields.io/badge/Arduino-Compatible-green.svg)](https://www.arduino.cc/)
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-Compatible-orange.svg)](https://platformio.org/)
 
-Lightweight JSON-RPC 2.0 client and server library for Arduino, ESP32, ESP8266, and other embedded platforms. Published as `RPCToolkit` for Arduino and PlatformIO, from the `rpc-arduino-toolkit` repository. Part of the RPC Toolkit ecosystem for compatible JSON-RPC integrations.
+Lightweight JSON-RPC 2.0 client and server library for ESP32, ESP8266, and compatible Arduino-style embedded targets. Packaged as `RPCToolkit` for Arduino and PlatformIO metadata, from the `rpc-arduino-toolkit` repository. Part of the RPC Toolkit ecosystem for compatible JSON-RPC integrations.
 
 ## Project Status
 
-RPCToolkit is an early public version. Version 1.0.0 is currently in development as the initial public release candidate.
+RPCToolkit 1.0.0 is prepared as the initial public release for ESP32/ESP8266-focused Arduino-compatible targets.
 
-- The API may still change before the first official release.
-- GitHub installation is currently the recommended method.
+- GitHub installation is currently the recommended method until registry indexing is complete.
+- Arduino Library Manager and PlatformIO Registry publication are planned; package metadata is prepared under the `RPCToolkit` name.
 - RPC Toolkit Safe Mode HTTP interoperability is implemented.
 - ESP32 Safe Mode HTTP interoperability has been physically validated against `rpc-express-toolkit`.
 - ESP8266 HTTP client behavior has been physically validated against an ESP32 Arduino HTTP server with Safe Mode enabled.
 - Safe Mode interoperability behavior and test coverage are tracked in [`docs/SAFE_MODE_INTEROPERABILITY.md`](docs/SAFE_MODE_INTEROPERABILITY.md).
-- First-release gates before registry publication are API finalization, dependency compatibility review, refreshed reference interoperability runs, and a tagged GitHub release.
-- Arduino Library Manager and PlatformIO Registry publication are planned after the first official release is ready.
+- Remaining registry-publication checks are dependency compatibility review, refreshed reference interoperability runs, and a tagged GitHub release.
 
 ## Features
 
@@ -30,12 +29,13 @@ RPCToolkit is an early public version. Version 1.0.0 is currently in development
 - **Cross-Platform** - Designed for standard JSON-RPC interoperability with compatible clients and servers
 
 ### Supported Platforms
-- **ESP32** - Current validation target; WiFi/HTTP supported
-- **ESP8266** - WiFi/HTTP supported through Arduino `Client` sockets; HTTP client runtime has physical validation
-- **Arduino-compatible cores with C++ `std::function` support** - Serial transport and core RPC types
+- **ESP32** - Current primary validation target; WiFi/HTTP supported
+- **ESP8266** - Declared supported architecture; WiFi/HTTP supported through Arduino `Client` sockets, with HTTP client runtime physically validated
+- **Other Arduino-compatible cores with C++ `std::function` support** - Serial transport and core RPC types may work, but are not declared in the first registry metadata until validated
 - **STM32 / RP2040** - Planned validation through the Arduino framework
 
 AVR boards such as Uno, Mega, and Nano are not a validated target for the current implementation.
+Library metadata currently declares `esp32` and `esp8266` for registry submission.
 
 ### Supported Transports
 
@@ -71,7 +71,7 @@ These are the main points to check before using the library in an application:
 
 ### Arduino IDE - Manual GitHub Installation
 
-The library is not yet published in Arduino Library Manager. Until the first official release is indexed, install it manually from GitHub:
+The library is not yet published in Arduino Library Manager. Until registry indexing is complete, install it manually from GitHub:
 
 1. Download the repository ZIP from GitHub using **Code > Download ZIP**.
 2. Extract it into your Arduino sketchbook `libraries` directory.
@@ -89,7 +89,7 @@ On Windows, the sketchbook libraries directory is usually `Documents/Arduino/lib
 
 ### Arduino Library Manager - Planned
 
-Arduino Library Manager installation is planned for a future official release. For now, use the manual GitHub installation method above.
+Arduino Library Manager installation is planned after registry submission and indexing. For now, use the manual GitHub installation method above.
 
 ### PlatformIO
 Add to `platformio.ini`:
@@ -495,7 +495,7 @@ pio test -e native
 
 ## Roadmap
 
-### v1.0.0 - Initial Public Release Candidate
+### v1.0.0 - Initial Public Release
 - [x] Core RPC client/server
 - [x] Serial transport
 - [x] HTTP client transport over Arduino Client-compatible sockets
@@ -510,14 +510,15 @@ pio test -e native
 - [x] Basic examples for Serial, WiFi, introspection, and Safe Mode
 - [x] Capture ESP32 Safe Mode interoperability validation evidence
 - [x] Capture ESP8266 HTTP client runtime validation evidence
+- [x] Prepare Arduino Library Manager-compliant package metadata
+- [x] Prepare PlatformIO package metadata
+- [x] Stabilize public API for initial 1.0.0 metadata
+- [x] Publish first GitHub prerelease (`v1.0.0-rc.1`)
+
+### Registry Publication
 - [ ] Rerun reference Safe Mode interoperability checks for release artifacts
 - [ ] Review dependency compatibility before declaring final ArduinoJson support range
-- [ ] Finalize public API before official release
-- [x] Publish first GitHub pre-release candidate
-- [ ] Publish first final GitHub release
-
-### Planned After v1.0.0
-- [ ] Finalize Arduino Library Manager-compliant package metadata
+- [ ] Publish tagged GitHub release
 - [ ] Arduino Library Manager publication
 - [ ] PlatformIO Registry publication
 - [ ] Bluetooth LE transport (ESP32)
