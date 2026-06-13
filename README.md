@@ -10,14 +10,14 @@ Lightweight JSON-RPC 2.0 client and server library for ESP32, ESP8266, and compa
 
 RPCToolkit 1.0.0 is prepared as the initial public release for ESP32/ESP8266-focused Arduino-compatible targets.
 
-- GitHub installation is currently the recommended method until registry indexing is complete.
-- Arduino Library Manager submission has been accepted; availability depends on the next registry index refresh.
+- Arduino Library Manager publication is complete as `RPCToolkit`.
 - PlatformIO Registry publication is complete as `n-car/RPCToolkit`.
+- GitHub installation remains available for development snapshots.
 - RPC Toolkit Safe Mode HTTP interoperability is implemented.
 - ESP32 Safe Mode HTTP interoperability has been physically validated against `rpc-express-toolkit`.
 - ESP8266 HTTP client behavior has been physically validated against an ESP32 Arduino HTTP server with Safe Mode enabled.
 - Safe Mode interoperability behavior and test coverage are tracked in [`docs/SAFE_MODE_INTEROPERABILITY.md`](docs/SAFE_MODE_INTEROPERABILITY.md).
-- Remaining registry-publication check is Arduino Library Manager indexing.
+- Registry publication for the initial public release is complete.
 
 ## Features
 
@@ -70,16 +70,17 @@ These are the main points to check before using the library in an application:
 
 ## Installation
 
+### Arduino IDE - Library Manager
+
+Install `RPCToolkit` from Arduino IDE:
+
+1. Open **Tools > Manage Libraries...**.
+2. Search for `RPCToolkit`.
+3. Install version `1.0.0` or newer.
+
 ### Arduino IDE - Manual GitHub Installation
 
-The library is not yet published in Arduino Library Manager. Until registry indexing is complete, install it manually from GitHub:
-
-1. Download the repository ZIP from GitHub using **Code > Download ZIP**.
-2. Extract it into your Arduino sketchbook `libraries` directory.
-3. Rename the extracted folder to `RPCToolkit` if needed.
-4. Restart Arduino IDE.
-
-You can also clone the repository directly:
+For development snapshots, clone the repository directly:
 
 ```bash
 cd ~/Arduino/libraries
@@ -87,10 +88,6 @@ git clone https://github.com/n-car/rpc-arduino-toolkit.git RPCToolkit
 ```
 
 On Windows, the sketchbook libraries directory is usually `Documents/Arduino/libraries`.
-
-### Arduino Library Manager - Indexing Pending
-
-Arduino Library Manager submission has been accepted. The library becomes installable after the registry index refreshes. Until then, use the manual GitHub installation method above.
 
 ### PlatformIO
 Add to `platformio.ini`:
@@ -525,7 +522,7 @@ pio test -e native
 ### Registry Publication
 - [x] Publish tagged GitHub release
 - [x] Arduino Library Manager submission accepted
-- [ ] Arduino Library Manager indexing complete
+- [x] Arduino Library Manager indexing complete
 - [x] PlatformIO Registry publication
 - [ ] Review ArduinoJson 7 compatibility before expanding the supported dependency range
 - [ ] Rerun reference Safe Mode interoperability checks before claiming additional ESP8266 reference/server coverage
