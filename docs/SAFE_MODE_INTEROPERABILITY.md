@@ -25,7 +25,7 @@ Not covered in this pass:
 
 Status terms used below:
 - **Covered by sketch**: exercised by a public Arduino example/test sketch, but not necessarily over HTTP.
-- **Physical evidence needed**: the test requires ESP32/ESP8266 hardware and a live Node.js endpoint; capture serial/LAN logs and pass/fail summary before treating it as release evidence.
+- **Pending physical evidence**: the test requires board hardware and a live endpoint, and should not be treated as validated until a pass/fail summary has been captured.
 - **ESP32 reference validated**: exercised on a physical ESP32 over WiFi/HTTP against a live `rpc-express-toolkit` Safe Mode endpoint.
 - **ESP8266 client board-to-board validated**: exercised on a physical ESP8266EX HTTP client over WiFi/HTTP against an ESP32 Arduino HTTP server with Safe Mode enabled.
 - **Implementation difference**: behavior is intentionally different between JavaScript and Arduino because ArduinoJson has no native `Date` or `BigInt` value types.
@@ -61,7 +61,7 @@ Captured ESP8266 client board-to-board validation:
 - ESP8266 HTTP client -> ESP32 Arduino HTTP server: `SUMMARY pass=21 fail=0 gap=0`.
 - Client heap snapshots: 47,480 bytes free heap at suite start, 45,928 bytes at suite end, fragmentation from 1% to 5%.
 
-ESP8266 reference validation against `rpc-express-toolkit` should still be rerun before registry publication if the release notes claim full ESP8266 reference interoperability.
+ESP8266 reference validation against `rpc-express-toolkit` should still be rerun before claiming full ESP8266 reference interoperability.
 
 ### Node.js Safe Endpoint
 
@@ -363,10 +363,10 @@ Expected:
 - Arduino preserves BigInt marker strings.
 - This case validates application-level `error.data`. It is separate from strict-mode compatibility errors, where Arduino currently returns code/message without diagnostic `error.data`.
 
-## Release Gate
+## Future Validation Checklist
 
-Before claiming full Safe Mode interoperability in registry publication:
-- Rerun the full ESP32 matrix when preparing the release artifact and save serial/LAN logs with the result summary.
+Before claiming broader Safe Mode interoperability than the evidence above:
+- Rerun the full ESP32 matrix when preparing a new release artifact and save serial/LAN logs with the result summary.
 - Rerun ESP8266 HTTP client checks against the `rpc-express-toolkit` reference endpoint if claiming ESP8266 reference interoperability.
 - Capture ESP8266 HTTP server runtime evidence if claiming ESP8266 server runtime coverage.
 - Capture firmware commit, `rpc-express-toolkit` version/commit, board model, Arduino core/platform version, and pass/fail summary.
