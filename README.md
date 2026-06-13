@@ -1,8 +1,9 @@
 # RPCToolkit
 
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Arduino](https://img.shields.io/badge/Arduino-Compatible-green.svg)](https://www.arduino.cc/)
-[![PlatformIO](https://img.shields.io/badge/PlatformIO-Compatible-orange.svg)](https://platformio.org/)
+[![Status](https://img.shields.io/badge/status-stable-green.svg)](https://github.com/n-car/rpc-arduino-toolkit/releases/tag/v1.0.0)
+[![Arduino Library](https://www.ardu-badge.com/badge/RPCToolkit.svg)](https://www.arduino.cc/reference/en/libraries/rpctoolkit/)
+[![PlatformIO Registry](https://badges.registry.platformio.org/packages/n-car/library/RPCToolkit.svg)](https://registry.platformio.org/libraries/n-car/RPCToolkit)
 
 Lightweight JSON-RPC 2.0 client and server library for ESP32, ESP8266, and compatible Arduino-style embedded targets. Packaged as `RPCToolkit` for Arduino and PlatformIO metadata, from the `rpc-arduino-toolkit` repository. Part of the RPC Toolkit ecosystem for compatible JSON-RPC integrations.
 
