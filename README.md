@@ -12,12 +12,12 @@ RPCToolkit 1.0.0 is prepared as the initial public release for ESP32/ESP8266-foc
 
 - GitHub installation is currently the recommended method until registry indexing is complete.
 - Arduino Library Manager submission has been accepted; availability depends on the next registry index refresh.
-- PlatformIO Registry publication is planned; package metadata is prepared under the `RPCToolkit` name.
+- PlatformIO Registry publication is complete as `n-car/RPCToolkit`.
 - RPC Toolkit Safe Mode HTTP interoperability is implemented.
 - ESP32 Safe Mode HTTP interoperability has been physically validated against `rpc-express-toolkit`.
 - ESP8266 HTTP client behavior has been physically validated against an ESP32 Arduino HTTP server with Safe Mode enabled.
 - Safe Mode interoperability behavior and test coverage are tracked in [`docs/SAFE_MODE_INTEROPERABILITY.md`](docs/SAFE_MODE_INTEROPERABILITY.md).
-- Remaining registry-publication checks are Arduino Library Manager indexing and PlatformIO Registry publication.
+- Remaining registry-publication check is Arduino Library Manager indexing.
 
 ## Features
 
@@ -100,10 +100,15 @@ platform = espressif32
 board = esp32dev
 framework = arduino
 lib_deps =
-    https://github.com/n-car/rpc-arduino-toolkit.git
+    n-car/RPCToolkit@^1.0.0
 ```
 
-The PlatformIO Registry name will be used only after the library is officially published there.
+For development directly from the repository, you can still use:
+
+```ini
+lib_deps =
+    https://github.com/n-car/rpc-arduino-toolkit.git
+```
 
 ### Selective Includes
 
@@ -482,7 +487,8 @@ RPC Toolkit ecosystem projects. Standard JSON-RPC interoperability is the defaul
 
 This repository does not require a bundled PlatformIO project to use the
 examples. Open the sketches in Arduino IDE, or create a small PlatformIO project
-that installs the library through the GitHub `lib_deps` URL shown above.
+that installs the library through the PlatformIO Registry entry or GitHub URL
+shown above.
 
 For ad-hoc PlatformIO checks, `pio ci` can compile a sketch against a selected
 board and the local library path.
@@ -520,7 +526,7 @@ pio test -e native
 - [x] Publish tagged GitHub release
 - [x] Arduino Library Manager submission accepted
 - [ ] Arduino Library Manager indexing complete
-- [ ] PlatformIO Registry publication
+- [x] PlatformIO Registry publication
 - [ ] Review ArduinoJson 7 compatibility before expanding the supported dependency range
 - [ ] Rerun reference Safe Mode interoperability checks before claiming additional ESP8266 reference/server coverage
 - [ ] Bluetooth LE transport (ESP32)
