@@ -1,5 +1,6 @@
 # RPCToolkit
 
+[![CI](https://github.com/n-car/rpc-arduino-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/n-car/rpc-arduino-toolkit/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-stable-green.svg)](https://github.com/n-car/rpc-arduino-toolkit/releases/tag/v1.0.0)
 [![Arduino Library](https://www.ardu-badge.com/badge/RPCToolkit.svg)](https://www.arduino.cc/reference/en/libraries/rpctoolkit/)

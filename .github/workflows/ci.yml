@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Arduino lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Arduino library lint
+        uses: arduino/arduino-lint-action@v2
+        with:
+          project-type: library
+          compliance: strict
+          library-manager: submit
+
+  platformio:
+    name: PlatformIO examples
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Install PlatformIO
+        run: python -m pip install --upgrade platformio
+
+      - name: Package library
+        run: pio pkg pack
+
+      - name: Compile ESP32 examples
+        run: |
+          pio ci examples/BasicServer/BasicServer.ino --lib . --board esp32dev
+          pio ci examples/WiFiServer/WiFiServer.ino --lib . --board esp32dev
+          pio ci examples/SafeModeInteropTest/SafeModeInteropTest.ino --lib . --board esp32dev --project-option='build_flags=-DRPC_ENABLE_SAFE_MODE=1 -DRPC_SAFE_STRICT_MODE=1'
+
+      - name: Compile ESP8266 example
+        run: pio ci examples/WiFiHttpClient/WiFiHttpClient.ino --lib . --board nodemcuv2
