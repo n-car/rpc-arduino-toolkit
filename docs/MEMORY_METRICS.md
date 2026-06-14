@@ -10,6 +10,52 @@ guarantees. Actual memory usage depends on the board core, ArduinoJson version,
 compiler and linker settings, enabled feature flags, transport, registered
 methods, JSON document sizes, and surrounding sketch code.
 
+## Practical Memory Guidance
+
+Size the server method table at compile time:
+
+```cpp
+RpcServer<8> server;  // 8 methods max
+```
+
+Use `StaticJsonDocument` deliberately for predictable ownership and avoid
+creating multiple large documents in the same call stack:
+
+```cpp
+StaticJsonDocument<512> doc;
+```
+
+Most internal request parsing uses bounded ArduinoJson documents sized from
+`RPC_MAX_REQUEST_SIZE`. On ESP8266, response holder objects use heap-backed
+ArduinoJson documents to avoid large stack allocations in client code. Keep
+application-owned documents small and measure free heap and fragmentation in the
+real sketch.
+
+Handlers return `JsonVariant` views. Store owned scalar/object results in a
+document that remains alive until the response is serialized:
+
+```cpp
+StaticJsonDocument<64> resultDoc;
+
+JsonVariant makeNumberResult(int value) {
+    resultDoc.clear();
+    resultDoc.set(value);
+    return resultDoc.as<JsonVariant>();
+}
+
+rpc.addMethod("answer", []() -> JsonVariant {
+    return makeNumberResult(42);
+});
+```
+
+Feature flags can reduce memory or code size for constrained sketches:
+
+```cpp
+#define RPC_ENABLE_SAFE_MODE 0      // Disable Safe Mode helpers and HTTP encoding
+#define RPC_ENABLE_SCHEMA_SUPPORT 0 // Disable description metadata storage
+#define RPC_MAX_METHOD_NAME 16      // Limit method name length
+```
+
 ## Build Delta Method
 
 Build metrics are generated from minimal firmware scenarios and compared against

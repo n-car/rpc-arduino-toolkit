@@ -9,7 +9,7 @@ Lightweight JSON-RPC 2.0 client and server library for ESP32, ESP8266, and compa
 
 ## Project Status
 
-RPCToolkit 1.0.0 is prepared as the initial public release for ESP32/ESP8266-focused Arduino-compatible targets.
+RPCToolkit 1.0.0 is the initial public release for ESP32/ESP8266-focused Arduino-compatible targets.
 
 - Arduino Library Manager publication is complete as `RPCToolkit`.
 - PlatformIO Registry publication is complete as `n-car/RPCToolkit`.
@@ -286,50 +286,19 @@ common patterns are maintained separately:
 - [`docs/TRANSPORTS.md`](docs/TRANSPORTS.md) - Serial vs HTTP, WiFi/Ethernet usage, `RpcWiFiTransport` deprecation, Safe Mode headers, and custom transports.
 - [`docs/SAFE_MODE_INTEROPERABILITY.md`](docs/SAFE_MODE_INTEROPERABILITY.md) - Safe Mode protocol expectations, JavaScript/Arduino type differences, and validation matrix.
 
-## Memory Optimization
+## Memory And Resource Notes
 
-### Sizing and Allocation
+Use `RpcServer<N>` to cap the number of methods at compile time, keep
+application-owned `StaticJsonDocument` instances sized for the real payloads, and
+ensure documents that own handler return values remain alive until serialization
+is complete.
 
-```cpp
-// Specify max methods at compile time
-RpcServer<8> server;  // 8 methods max
+ESP8266 works, but has much tighter stack and heap headroom than ESP32. Measure
+free heap and fragmentation in the final sketch when Safe Mode, HTTP, batch
+requests, or larger JSON payloads are enabled.
 
-// Use StaticJsonDocument for predictable memory
-StaticJsonDocument<512> doc;
-```
-
-Most internal request parsing uses bounded ArduinoJson documents sized from
-`RPC_MAX_REQUEST_SIZE`. On ESP8266, response holder objects use heap-backed
-ArduinoJson documents to avoid large stack allocations in client code. Keep
-application-owned documents small and avoid creating multiple large
-`StaticJsonDocument` objects in the same call stack.
-
-### Handler Result Storage
-
-Handlers return `JsonVariant` views. Store owned scalar/object results in a document that remains alive until the response is serialized:
-
-```cpp
-StaticJsonDocument<64> resultDoc;
-
-JsonVariant makeNumberResult(int value) {
-    resultDoc.clear();
-    resultDoc.set(value);
-    return resultDoc.as<JsonVariant>();
-}
-
-rpc.addMethod("answer", []() -> JsonVariant {
-    return makeNumberResult(42);
-});
-```
-
-### Disable Features
-
-```cpp
-// In RpcConfig.h or build flags
-#define RPC_ENABLE_SAFE_MODE 0      // Disable Safe Mode helpers and HTTP encoding
-#define RPC_ENABLE_SCHEMA_SUPPORT 0 // Disable description metadata storage
-#define RPC_MAX_METHOD_NAME 16      // Limit method name length
-```
+See [`docs/MEMORY_METRICS.md`](docs/MEMORY_METRICS.md) for practical sizing
+guidance, measured build deltas, and physical ESP32/ESP8266 heap notes.
 
 ## Safe Mode
 
@@ -382,25 +351,6 @@ examples.
 #define RPC_DEFAULT_TIMEOUT 5000    // Default timeout (ms)
 #define RPC_SERIAL_TIMEOUT 1000     // Serial read timeout (ms)
 ```
-
-## Memory Usage
-
-Memory usage depends on the board core, ArduinoJson version, enabled feature
-flags, transport, registered methods, JSON document sizes, and application code.
-Treat published values as representative measurements, not guarantees.
-
-Representative ESP32 board-to-board runtime heap testing with Safe Mode enabled
-reported a client low-water delta of 7,596 bytes during the full interoperability
-suite and a server low-water delta of 13,108 bytes while handling 36 HTTP
-requests.
-
-An ESP8266EX client was physically tested against an ESP32 Arduino HTTP server
-with Safe Mode enabled. The run completed with `SUMMARY pass=21 fail=0 gap=0`.
-The client printed 47,480 bytes free heap at suite start and 45,928 bytes at
-suite end, with fragmentation rising from 1% to 5% during the run.
-
-See [`docs/MEMORY_METRICS.md`](docs/MEMORY_METRICS.md) for the full measured
-build delta table and runtime heap notes.
 
 ## Cross-Platform Compatibility
 
@@ -500,41 +450,11 @@ pio test -e native
 
 ## Roadmap
 
-### v1.0.0 - Initial Public Release
-- [x] Core RPC client/server
-- [x] Serial transport
-- [x] HTTP client transport over Arduino Client-compatible sockets
-- [x] HTTP server transport over Arduino Client-compatible sockets
-- [x] Built-in introspection
-- [x] Batch requests
-- [x] Optional Safe Mode helper utilities
-- [x] RPC Toolkit Safe Mode HTTP header negotiation
-- [x] Recursive Safe Mode encode/decode for params and results
-- [x] Safe Mode interoperability documentation and test matrix
-- [x] Focused Safe Mode marker-like string round-trip test sketch
-- [x] Basic examples for Serial, WiFi, introspection, and Safe Mode
-- [x] Capture ESP32 Safe Mode interoperability validation evidence
-- [x] Capture ESP8266 HTTP client runtime validation evidence
-- [x] Prepare Arduino Library Manager-compliant package metadata
-- [x] Prepare PlatformIO package metadata
-- [x] Stabilize public API for initial 1.0.0 metadata
-- [x] Publish first GitHub prerelease (`v1.0.0-rc.1`)
+The initial `1.0.0` registry release is complete. Current follow-up work is
+focused on ArduinoJson 7 compatibility review, additional ESP8266 reference
+validation, optional schema validation, and future transport/discovery options.
 
-### Registry Publication
-- [x] Publish tagged GitHub release
-- [x] Arduino Library Manager submission accepted
-- [x] Arduino Library Manager indexing complete
-- [x] PlatformIO Registry publication
-- [ ] Review ArduinoJson 7 compatibility before expanding the supported dependency range
-- [ ] Rerun reference Safe Mode interoperability checks before claiming additional ESP8266 reference/server coverage
-- [ ] Bluetooth LE transport (ESP32)
-- [ ] Optional schema-based params/result validation
-
-### Future Transport and Discovery Work
-- [ ] LoRa transport
-- [ ] WebSocket support
-- [ ] mDNS discovery
-- [ ] OTA updates integration
+See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the full checklist.
 
 ## Contributing
 
