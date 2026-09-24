@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/n-car/rpc-arduino-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/n-car/rpc-arduino-toolkit/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/status-stable-green.svg)](https://github.com/n-car/rpc-arduino-toolkit/releases/tag/v1.0.0)
+[![Status](https://img.shields.io/badge/status-stable-green.svg)](https://github.com/n-car/rpc-arduino-toolkit/releases/tag/v1.1.0)
 [![Arduino Library](https://www.ardu-badge.com/badge/RPCToolkit.svg)](https://www.arduino.cc/reference/en/libraries/rpctoolkit/)
 [![PlatformIO Registry](https://badges.registry.platformio.org/packages/n-car/library/RPCToolkit.svg)](https://registry.platformio.org/libraries/n-car/RPCToolkit)
 
@@ -26,7 +26,7 @@ RPCToolkit 1.0.0 is the initial public release for ESP32/ESP8266-focused Arduino
 ### Core Features
 - **JSON-RPC 2.0 support** - Standard JSON-RPC 2.0 by default. Typed Safe Mode extensions only when explicitly enabled by compatible endpoints.
 - **Client & Server** - Both RPC client and server implementations
-- **Built-in Introspection** - API discovery with `__rpc.listMethods`, `__rpc.version`, `__rpc.describe`, and `__rpc.capabilities`
+- **Optional Introspection** - API discovery with `__rpc.listMethods`, `__rpc.version`, `__rpc.describe`, and `__rpc.capabilities`; disable it in production with `RPC_ENABLE_INTROSPECTION=0`
 - **Multiple Transports** - Serial plus HTTP client/server transports over Arduino `Client` sockets
 - **Memory-conscious** - Static allocation where practical, with ESP8266-specific heap-backed response buffers to reduce stack pressure
 - **Cross-Platform** - Designed for standard JSON-RPC interoperability with compatible clients and servers
@@ -99,7 +99,7 @@ platform = espressif32
 board = esp32dev
 framework = arduino
 lib_deps =
-    n-car/RPCToolkit@^1.0.0
+    n-car/RPCToolkit@^1.1.0
 ```
 
 For development directly from the repository, you can still use:
@@ -344,6 +344,7 @@ examples.
 #define RPC_ENABLE_SAFE_MODE 0      // Enable RPC Toolkit Safe Mode
 #define RPC_SAFE_STRICT_MODE 1      // Require Safe Mode HTTP header when Safe Mode is enabled
 #define RPC_ENABLE_BATCH 1          // Enable JSON-RPC batch requests
+#define RPC_ENABLE_INTROSPECTION 1  // Set to 0 to hide __rpc.* methods
 #define RPC_ENABLE_LOGGING 0        // Enable debug logging
 #define RPC_ENABLE_NOTIFICATIONS 1  // Enable fire-and-forget calls
 #define RPC_ENABLE_SCHEMA_SUPPORT 1 // Enable method description metadata

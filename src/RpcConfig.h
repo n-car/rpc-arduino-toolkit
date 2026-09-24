@@ -61,6 +61,12 @@
   #define RPC_ENABLE_BATCH 1
 #endif
 
+// Enable built-in __rpc.* introspection methods. Disable in production builds
+// that should not expose method and capability metadata.
+#ifndef RPC_ENABLE_INTROSPECTION
+  #define RPC_ENABLE_INTROSPECTION 1
+#endif
+
 // Enable debug logging to Serial
 #ifndef RPC_ENABLE_LOGGING
   #define RPC_ENABLE_LOGGING 0

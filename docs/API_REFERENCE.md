@@ -299,13 +299,15 @@ rpc.addResponseMethod("domainError",
 ## Built-In Introspection
 
 The RPC server includes built-in introspection methods for API discovery:
+Built-in `__rpc.*` methods are compiled when `RPC_ENABLE_INTROSPECTION` is `1`.
+Set it to `0` for production firmware that should not expose method metadata.
 
 ```cpp
 RpcResponse resp = rpc.call("__rpc.listMethods");
 // ["ping", "setLED", "readTemp", ...]
 
 resp = rpc.call("__rpc.version");
-// {"toolkit":"rpc-arduino-toolkit","version":"1.0.0","methodCount":3}
+// {"toolkit":"rpc-arduino-toolkit","version":"1.1.0","methodCount":3}
 
 resp = rpc.call("__rpc.describe", "{\"method\":\"add\"}");
 // {"name":"add","description":"Add two numbers","exposeSchema":true}

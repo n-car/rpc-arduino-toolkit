@@ -7,7 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-24
+
 ### Added
+- Added `RPC_ENABLE_INTROSPECTION` so production firmware can omit built-in `__rpc.*` methods.
 - Initial project structure
 - RpcServer class for handling JSON-RPC 2.0 requests
 - RpcClient class for making JSON-RPC 2.0 calls

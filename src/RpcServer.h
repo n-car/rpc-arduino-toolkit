@@ -59,6 +59,7 @@ private:
 
     // Execute method
     RpcResponse executeMethod(RpcRequest& req, bool encodeSafe = false) {
+#if RPC_ENABLE_INTROSPECTION
         // Built-in introspection methods (memory-efficient)
         if (req.method == "__rpc.listMethods") {
             StaticJsonDocument<256> doc;
@@ -78,7 +79,7 @@ private:
         if (req.method == "__rpc.version") {
             StaticJsonDocument<128> doc;
             doc["toolkit"] = "rpc-arduino-toolkit";
-            doc["version"] = "1.0.0";
+            doc["version"] = "1.1.0";
             doc["methodCount"] = methodCount;
 
             RpcResponse resp;
@@ -150,6 +151,7 @@ private:
             resp.setResult(doc.as<JsonVariant>(), req.id, encodeSafe);
             return resp;
         }
+#endif
 
         // Find method
         Method* method = nullptr;
