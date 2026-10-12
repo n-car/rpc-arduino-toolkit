@@ -280,11 +280,11 @@ public:
             }
         }
 
-        bool bodyOk = isChunked
+        bool bodyOk = httpStatus == 204 || (isChunked
             ? readChunkedBody(start)
             : (contentLength >= 0
                 ? readBodyByLength(static_cast<size_t>(contentLength), start)
-                : readBodyUntilClose(start));
+                : readBodyUntilClose(start)));
 
         client.stop();
         if (socketSettleDelay > 0) {
@@ -300,6 +300,10 @@ public:
         if (httpStatus < 200 || httpStatus >= 300) {
             lastErrorMessage = "HTTP status " + String(httpStatus);
             return false;
+        }
+
+        if (httpStatus == 204) {
+            return true;
         }
 
         if (responseBody.isEmpty()) {
@@ -320,6 +324,10 @@ public:
 
     bool available() override {
         return hasResponse;
+    }
+
+    bool hasNoContentResponse() const override {
+        return httpStatus == 204;
     }
 
     void setTimeout(unsigned long ms) override {

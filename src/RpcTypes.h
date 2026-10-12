@@ -7,6 +7,7 @@
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include <math.h>
 #include "RpcConfig.h"
 
 // ============================================================================
@@ -38,16 +39,35 @@ public:
     String jsonrpc;        // Always "2.0"
     String method;         // Method name
     JsonVariantConst params; // Method parameters
-    JsonVariant id;        // Request ID (null for notifications)
+    JsonVariant id;        // Request ID (may explicitly be null)
+    bool hasId;           // Only an absent id denotes a notification
 
-    RpcRequest() : jsonrpc("2.0") {}
+    RpcRequest() : jsonrpc("2.0"), hasId(false) {}
 
     bool isNotification() const {
-        return id.isNull();
+        return !hasId && id.isNull();
     }
 
     bool isValid() const {
         return jsonrpc == "2.0" && !method.isEmpty();
+    }
+
+    static bool isValidEnvelope(JsonVariantConst item) {
+        if (!item.is<JsonObjectConst>() || !item["jsonrpc"].is<const char*>() ||
+            strcmp(item["jsonrpc"].as<const char*>(), "2.0") != 0 ||
+            !item["method"].is<const char*>() || item["method"].as<const char*>()[0] == '\0') {
+            return false;
+        }
+        if (item.containsKey("params") && !item["params"].is<JsonObjectConst>() &&
+            !item["params"].is<JsonArrayConst>()) {
+            return false;
+        }
+        JsonVariantConst requestId = item["id"];
+        if (!requestId.isNull() && !requestId.is<const char*>() &&
+            (requestId.is<bool>() || !requestId.is<double>() || !isfinite(requestId.as<double>()))) {
+            return false;
+        }
+        return true;
     }
 };
 
@@ -302,7 +322,8 @@ public:
 
 class RpcResponse {
 private:
-#if defined(ESP8266)
+// Response objects and their temporaries must not consume the small task stack.
+#if defined(ESP8266) || defined(ESP32)
     DynamicJsonDocument doc;
 #else
     StaticJsonDocument<RPC_JSON_DOC_SIZE> doc;
@@ -312,14 +333,14 @@ private:
 
 public:
     RpcResponse()
-#if defined(ESP8266)
+#if defined(ESP8266) || defined(ESP32)
         : doc(RPC_JSON_DOC_SIZE), _hasError(false), _isValid(false) {}
 #else
         : _hasError(false), _isValid(false) {}
 #endif
 
     RpcResponse(const RpcResponse& other)
-#if defined(ESP8266)
+#if defined(ESP8266) || defined(ESP32)
         : doc(RPC_JSON_DOC_SIZE), _hasError(other._hasError), _isValid(other._isValid) {
 #else
         : _hasError(other._hasError), _isValid(other._isValid) {
@@ -514,13 +535,14 @@ typedef std::function<RpcResponse(RpcRequest&, bool)> RpcResponseHandler;
 
 class RpcBatchResponse {
 private:
-#if defined(ESP8266)
+#if defined(ESP8266) || defined(ESP32)
     DynamicJsonDocument doc;
 #else
     StaticJsonDocument<RPC_JSON_DOC_SIZE> doc;
 #endif
     bool _isValid;
     bool _isBatch;
+    bool _noResponse;
 
     JsonVariantConst itemAt(size_t index) const {
         if (!_isValid) {
@@ -537,10 +559,10 @@ private:
 
 public:
     RpcBatchResponse()
-#if defined(ESP8266)
-        : doc(RPC_JSON_DOC_SIZE), _isValid(false), _isBatch(false) {}
+#if defined(ESP8266) || defined(ESP32)
+        : doc(RPC_JSON_DOC_SIZE), _isValid(false), _isBatch(false), _noResponse(false) {}
 #else
-        : _isValid(false), _isBatch(false) {}
+        : _isValid(false), _isBatch(false), _noResponse(false) {}
 #endif
 
     // Parse from JSON string. Valid batch responses are arrays; a single
@@ -550,6 +572,7 @@ public:
     }
 
     bool parse(const String& json, bool decodeSafe) {
+        _noResponse = false;
         DeserializationError error = deserializeJson(doc, json);
         if (error) {
             RPC_LOG_F("Failed to parse batch response: %s", error.c_str());
@@ -601,6 +624,7 @@ public:
 
     // Error response for local transport failures/timeouts.
     void setError(int code, const char* message) {
+        _noResponse = false;
         doc.clear();
         doc["jsonrpc"] = "2.0";
         JsonObject error = doc.createNestedObject("error");
@@ -609,6 +633,15 @@ public:
         doc["id"] = JsonVariant();
         _isValid = true;
         _isBatch = false;
+    }
+
+    // A notification-only batch completed successfully without a wire response.
+    void setNoResponse() {
+        doc.clear();
+        doc.to<JsonArray>();
+        _isValid = true;
+        _isBatch = true;
+        _noResponse = true;
     }
 
     String toString() const {
@@ -620,7 +653,7 @@ public:
     bool isValid() const { return _isValid; }
     bool isBatch() const { return _isValid && _isBatch; }
     bool isSuccess() const {
-        if (!_isValid || count() == 0) {
+        if (!_isValid || (count() == 0 && !_noResponse)) {
             return false;
         }
 

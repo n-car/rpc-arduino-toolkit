@@ -46,6 +46,15 @@ client.stop();
 The class names intentionally say `Http`, not `WiFi`, because the same transport
 can be used over WiFi, Ethernet, or another compatible `Client`.
 
+### Empty HTTP Responses
+
+The server sends HTTP 204 when a valid notification or notification-only batch
+has no JSON-RPC response. The client transport exposes this through
+`hasNoContentResponse()` and `lastStatus() == 204`; `available()` remains false.
+`RpcClient::callBatch()` accepts this only for a nonempty, valid batch containing
+no IDs. Calls with `id: null` still require a response. Empty HTTP 200 responses
+are errors, not notification acknowledgements.
+
 ## Deprecated RpcWiFiTransport
 
 `RpcWiFiTransport` is kept only so older sketches can still compile. It is a
@@ -106,7 +115,9 @@ When `RPC_ENABLE_SAFE_MODE=0`, HTTP transports still send the header with
 
 With `RPC_ENABLE_SAFE_MODE=1` and `RPC_SAFE_STRICT_MODE=1`, HTTP server requests
 without `X-RPC-Safe-Enabled` are rejected with JSON-RPC error `-32600` for calls
-with ids. Notifications do not produce JSON-RPC response bodies.
+with IDs, including explicit null IDs. Valid notifications do not produce
+JSON-RPC response bodies. Invalid envelopes still receive `-32600` with
+`id: null`; omitting an ID from an invalid item does not make it a notification.
 
 See [SAFE_MODE_INTEROPERABILITY.md](SAFE_MODE_INTEROPERABILITY.md) for the full
 Safe Mode behavior and validation matrix.

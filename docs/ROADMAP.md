@@ -30,8 +30,9 @@
 
 ## Next Compatibility Work
 
+- [x] Validate ESP32 and ESP8266 as HTTP client and server in both Safe Mode settings (2026-10-12)
 - [ ] Review ArduinoJson 7 compatibility before expanding the supported dependency range
-- [ ] Rerun reference Safe Mode interoperability checks before claiming additional ESP8266 reference/server coverage
+- [ ] Rerun reference-PC Safe Mode interoperability checks before claiming additional ESP8266 reference coverage
 - [ ] Optional schema-based params/result validation
 
 ## Future Transport And Discovery Work

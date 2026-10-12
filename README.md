@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/n-car/rpc-arduino-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/n-car/rpc-arduino-toolkit/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/status-stable-green.svg)](https://github.com/n-car/rpc-arduino-toolkit/releases/tag/v1.1.0)
+[![Status](https://img.shields.io/badge/status-stable-green.svg)](https://github.com/n-car/rpc-arduino-toolkit/releases)
 [![Arduino Library](https://www.ardu-badge.com/badge/RPCToolkit.svg)](https://www.arduino.cc/reference/en/libraries/rpctoolkit/)
 [![PlatformIO Registry](https://badges.registry.platformio.org/packages/n-car/library/RPCToolkit.svg)](https://registry.platformio.org/libraries/n-car/RPCToolkit)
 
@@ -10,14 +10,14 @@ Lightweight JSON-RPC 2.0 client and server library for ESP32, ESP8266, and compa
 
 ## Project Status
 
-RPCToolkit 1.0.0 is the initial public release for ESP32/ESP8266-focused Arduino-compatible targets.
+Version **1.1.1** fixes protocol edge cases, notification-only HTTP batches, and ESP32 response-buffer stack use. See [CHANGELOG.md](CHANGELOG.md#111---2026-10-12); registry pages list available versions.
 
 - Arduino Library Manager publication is complete as `RPCToolkit`.
 - PlatformIO Registry publication is complete as `n-car/RPCToolkit`.
 - GitHub installation remains available for development snapshots.
 - RPC Toolkit Safe Mode HTTP interoperability is implemented.
 - ESP32 Safe Mode HTTP interoperability has been physically validated against `rpc-express-toolkit`.
-- ESP8266 HTTP client behavior has been physically validated against an ESP32 Arduino HTTP server with Safe Mode enabled.
+- ESP32 and ESP8266 HTTP client/server behavior was physically tested in both directions, with Safe Mode enabled and disabled, on 2026-10-12.
 - Safe Mode interoperability behavior and test coverage are tracked in [`docs/SAFE_MODE_INTEROPERABILITY.md`](docs/SAFE_MODE_INTEROPERABILITY.md).
 - Registry publication for the initial public release is complete.
 
@@ -28,12 +28,12 @@ RPCToolkit 1.0.0 is the initial public release for ESP32/ESP8266-focused Arduino
 - **Client & Server** - Both RPC client and server implementations
 - **Optional Introspection** - API discovery with `__rpc.listMethods`, `__rpc.version`, `__rpc.describe`, and `__rpc.capabilities`; disable it in production with `RPC_ENABLE_INTROSPECTION=0`
 - **Multiple Transports** - Serial plus HTTP client/server transports over Arduino `Client` sockets
-- **Memory-conscious** - Static allocation where practical, with ESP8266-specific heap-backed response buffers to reduce stack pressure
+- **Memory-conscious** - Bounded JSON documents, with heap-backed response buffers on ESP32 and ESP8266 to reduce stack pressure
 - **Cross-Platform** - Designed for standard JSON-RPC interoperability with compatible clients and servers
 
 ### Supported Platforms
 - **ESP32** - Current primary validation target; WiFi/HTTP supported
-- **ESP8266** - Declared supported architecture; WiFi/HTTP supported through Arduino `Client` sockets, with HTTP client runtime physically validated
+- **ESP8266** - Declared supported architecture; WiFi/HTTP supported through Arduino `Client` sockets, with client and server runtime physically validated
 - **Other Arduino-compatible cores with C++ `std::function` support** - Serial transport and core RPC types may work, but are not declared in the first registry metadata until validated
 - **STM32 / RP2040** - Planned validation through the Arduino framework
 
@@ -69,8 +69,14 @@ These are the main points to check before using the library in an application:
 - Server handlers return `JsonVariant` views. Any document that owns returned data must remain alive until the response is serialized.
 - ESP8266 works, but stack and heap headroom are tighter than ESP32. Keep `RPC_MAX_REQUEST_SIZE`, response size, batch size, and local `StaticJsonDocument` instances sized for the real sketch, and measure heap/fragmentation on hardware.
 - ArduinoJson has no native JavaScript `Date` or `BigInt` value types. Safe Mode date and BigInt markers are preserved as strings unless your sketch explicitly parses them.
+- Only an absent `id` denotes a notification; explicit `id: null` receives a response. Invalid envelopes, including scalar/null `params` and boolean/object/array IDs, return `-32600` with a null ID.
+- A notification-only batch completed with HTTP 204 returns a successful `RpcBatchResponse` with `count() == 0`. HTTP 204 for a batch containing calls remains an error.
 
 ## Installation
+
+Use version 1.1.1 or newer for the protocol and memory fixes described here.
+For local development, use `lib_deps = symlink://<relative-path-to-rpc-arduino-toolkit>`
+or the bundled `tests/platformio.ini`.
 
 ### Arduino IDE - Library Manager
 
@@ -78,7 +84,7 @@ Install `RPCToolkit` from Arduino IDE:
 
 1. Open **Tools > Manage Libraries...**.
 2. Search for `RPCToolkit`.
-3. Install version `1.0.0` or newer.
+3. Install version `1.1.1` or newer.
 
 ### Arduino IDE - Manual GitHub Installation
 
@@ -99,7 +105,7 @@ platform = espressif32
 board = esp32dev
 framework = arduino
 lib_deps =
-    n-car/RPCToolkit@^1.1.0
+    n-car/RPCToolkit@^1.1.1
 ```
 
 For development directly from the repository, you can still use:
@@ -294,6 +300,10 @@ application-owned `StaticJsonDocument` instances sized for the real payloads, an
 ensure documents that own handler return values remain alive until serialization
 is complete.
 
+On ESP32 and ESP8266, response and batch-response JSON documents use heap storage
+so response temporaries do not exhaust the default task stack. Their capacity is
+still bounded by `RPC_JSON_DOC_SIZE`; allow corresponding free heap headroom.
+
 ESP8266 works, but has much tighter stack and heap headroom than ESP32. Measure
 free heap and fragmentation in the final sketch when Safe Mode, HTTP, batch
 requests, or larger JSON payloads are enabled.
@@ -445,10 +455,14 @@ board and the local library path.
 
 ### Run Tests
 
-```bash
-# Native tests (host platform)
-pio test -e native
-```
+`tests/ProtocolRegression/ProtocolRegression.ino` checks envelope validation,
+null IDs, mixed batches, and HTTP 204 using in-memory fake transports/sockets.
+Build and run the sketch with `RPC_ENABLE_SAFE_MODE=0` and `1`. It requires no
+network connection; there is currently no bundled native host test environment.
+`tests/platformio.ini` provides `esp32-standard`, `esp32-safe`, `esp8266-standard`
+and `esp8266-safe` environments. Select the upload port explicitly. Checks stay
+active with `NDEBUG`; serial output at 115200 must report `RPC_PROTOCOL PASS`
+(54 checks standard, 57 Safe Mode). ESP32 tests use the default task stack.
 
 ## Roadmap
 

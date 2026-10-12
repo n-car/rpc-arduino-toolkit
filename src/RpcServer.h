@@ -34,13 +34,14 @@ private:
 
     // Parse request from a deserialized JSON value
     bool parseRequest(JsonVariant item, RpcRequest& req) {
-        if (!item.is<JsonObject>()) {
+        if (!RpcRequest::isValidEnvelope(item.as<JsonVariantConst>())) {
             return false;
         }
 
         req.jsonrpc = item["jsonrpc"] | "";
         req.method = item["method"] | "";
         req.params = item["params"].as<JsonVariantConst>();
+        req.hasId = item.containsKey("id");
         req.id = item["id"];
 
         return req.isValid();
@@ -79,7 +80,7 @@ private:
         if (req.method == "__rpc.version") {
             StaticJsonDocument<128> doc;
             doc["toolkit"] = "rpc-arduino-toolkit";
-            doc["version"] = "1.1.0";
+            doc["version"] = "1.1.1";
             doc["methodCount"] = methodCount;
 
             RpcResponse resp;
@@ -207,8 +208,7 @@ private:
             } else {
                 RpcRequest req;
                 if (!parseRequest(item, req)) {
-                    JsonVariant id = item["id"];
-                    responseJson = RpcError::invalidRequest(id).toString();
+                    responseJson = RpcError::invalidRequest(JsonVariant()).toString();
                 } else if (req.isNotification()) {
                     executeMethod(req, encodeSafe);
                     includeResponse = false;
@@ -283,19 +283,15 @@ private:
             bool hasResponse = false;
 
             for (JsonVariant item : batch) {
-                bool includeResponse = true;
-                JsonVariant id;
-
-                if (item.is<JsonObject>()) {
-                    id = item["id"];
-                    includeResponse = !id.isNull();
-                }
-
-                if (!includeResponse) {
+                RpcRequest req;
+                bool validRequest = parseRequest(item, req);
+                if (validRequest && req.isNotification()) {
                     continue;
                 }
 
-                RpcResponse resp = RpcError::compatibilityError(id);
+                RpcResponse resp = validRequest
+                    ? RpcError::compatibilityError(req.id)
+                    : RpcError::invalidRequest(JsonVariant());
                 if (hasResponse) {
                     output += ',';
                 }
@@ -315,17 +311,17 @@ private:
 #endif
         }
 
-        if (!doc.is<JsonObject>()) {
+        RpcRequest req;
+        if (!parseRequest(doc.as<JsonVariant>(), req)) {
             RpcResponse resp = RpcError::invalidRequest(JsonVariant());
             return resp.toString();
         }
 
-        JsonVariant id = doc["id"];
-        if (id.isNull()) {
+        if (req.isNotification()) {
             return "";
         }
 
-        RpcResponse resp = RpcError::compatibilityError(id);
+        RpcResponse resp = RpcError::compatibilityError(req.id);
         return resp.toString();
     }
 

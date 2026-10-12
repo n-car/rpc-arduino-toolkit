@@ -58,6 +58,16 @@ Use `addMethod(...)` for normal JSON-RPC `result` responses. Use
 `addResponseMethod(...)` when a method must return a complete `RpcResponse`, such
 as a custom JSON-RPC error with `error.data`.
 
+Requests must have `jsonrpc: "2.0"`, a nonempty string method, and object or array
+params when supplied. IDs may be strings, finite numbers, or explicit `null`;
+only a missing ID is a notification. Invalid envelopes return `-32600` with
+`id: null` without invoking the handler. Malformed JSON returns `-32700`.
+These rules apply independently to each batch item.
+
+Response handlers receive `RpcRequest::hasId` and can use `isNotification()`;
+testing `req.id.isNull()` alone does not distinguish a notification from an
+explicit null-ID call.
+
 ## RpcClient
 
 ```cpp
@@ -92,6 +102,7 @@ public:
     virtual void setTimeout(unsigned long ms);
 
     virtual bool isHttp() const;
+    virtual bool hasNoContentResponse() const;
     virtual bool hasClientSafeHeader() const;
     virtual bool clientSafeEnabled() const;
     virtual bool hasRemoteSafeHeader() const;
@@ -138,6 +149,7 @@ public:
     bool isHttp() const override;
     bool hasRemoteSafeHeader() const override;
     bool remoteSafeEnabled() const override;
+    bool hasNoContentResponse() const override;
 };
 ```
 
@@ -251,6 +263,11 @@ if (batchResp.isValid() && batchResp.count() == 2) {
 enabled. Notifications inside a batch are executed without response entries. If
 all batch items are notifications, HTTP transports return `204 No Content`.
 
+For such a batch, `callBatch()` returns a valid, successful `RpcBatchResponse`
+with `count() == 0`. A batch containing calls (including `id: null`) or invalid
+items must receive a JSON-RPC response: HTTP 204 is an error in those cases.
+An empty HTTP 200 response is also a transport error.
+
 ## Notifications
 
 ```cpp
@@ -307,7 +324,7 @@ RpcResponse resp = rpc.call("__rpc.listMethods");
 // ["ping", "setLED", "readTemp", ...]
 
 resp = rpc.call("__rpc.version");
-// {"toolkit":"rpc-arduino-toolkit","version":"1.1.0","methodCount":3}
+// {"toolkit":"rpc-arduino-toolkit","version":"1.1.1","methodCount":3}
 
 resp = rpc.call("__rpc.describe", "{\"method\":\"add\"}");
 // {"name":"add","description":"Add two numbers","exposeSchema":true}

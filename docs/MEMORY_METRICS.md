@@ -1,6 +1,7 @@
 # Memory Metrics
 
-Measured with PlatformIO build scenarios and physical WiFi/HTTP heap testing:
+Historical measurements from PlatformIO build scenarios and physical WiFi/HTTP
+heap testing (not remeasured for the 1.1.1 release):
 
 - 2026-06-11: build deltas and ESP32 board-to-board heap testing.
 - 2026-06-12: ESP8266EX HTTP client heap testing against an ESP32 Arduino HTTP server.
@@ -26,10 +27,22 @@ StaticJsonDocument<512> doc;
 ```
 
 Most internal request parsing uses bounded ArduinoJson documents sized from
-`RPC_MAX_REQUEST_SIZE`. On ESP8266, response holder objects use heap-backed
+`RPC_MAX_REQUEST_SIZE`. On ESP32 and ESP8266, response holder objects use heap-backed
 ArduinoJson documents to avoid large stack allocations in client code. Keep
 application-owned documents small and measure free heap and fragmentation in the
 real sketch.
+
+In the 1.1.1 release, ESP32 response and batch-response documents moved
+to the heap after a hardware test exposed a default-stack overflow. On the
+tested build, the `handleRequest` stack frame fell from 7,168 to 2,576 bytes and
+`executeMethod` from 2,816 to 512 bytes. Protocol and HTTP regressions then passed
+with the default 8 KB ESP32 task stack. These figures are build-specific, not
+new heap measurements or guarantees for application handlers.
+
+On ESP8266, the HTTP test fixture also needed heap-backed local documents:
+large documents in nested test functions exhausted its 4 KB stack. A successful
+test summary alone is insufficient; observe the board afterwards for resets.
+The corrected Safe Mode fixture completed a 40-second capture without a crash.
 
 Handlers return `JsonVariant` views. Store owned scalar/object results in a
 document that remains alive until the response is serialized:

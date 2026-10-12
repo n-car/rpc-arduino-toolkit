@@ -32,6 +32,8 @@ Status terms used below:
 
 ## Protocol Expectations
 
+- Safe Mode transforms only `params`, `result`, and `error.data`; it does not change method names, IDs, or error messages.
+- An explicit `id: null` is a call. Only a missing ID denotes a notification. Invalid envelopes receive errors even when no ID was supplied.
 - Standard JSON-RPC 2.0 remains the default. `RPC_ENABLE_SAFE_MODE` defaults to `0`.
 - Safe Mode over HTTP is opt-in and uses `X-RPC-Safe-Enabled: true|false`.
 - `RpcHttpClientTransport` sends the header and records the server response header.
@@ -45,7 +47,17 @@ Status terms used below:
 - Helper output such as `RpcSafe::serializeDate()` is treated as a normal string if inserted into ArduinoJson and passed through automatic Safe Mode encoding.
 - A standard or `safe=false` client may call a strict Safe Mode server as long as it sends `X-RPC-Safe-Enabled: false`. The server may still answer with `X-RPC-Safe-Enabled: true` and Safe Mode encoded response values when the server itself has Safe Mode enabled.
 
-## Reference Test Setup
+## Current Hardware Regressions (2026-10-12)
+
+Version 1.1.1 source was tested on one ESP32 and one ESP8266EX.
+
+- Offline protocol suite: 54 standard and 57 Safe Mode checks per board, 222 total, all passed with checks active under `NDEBUG`.
+- HTTP over an isolated board-to-board AP: ESP32 client to ESP8266 server and the reverse, each with Safe Mode disabled and enabled; 23 checks per run, 92 total, all passed.
+- Cases include explicit null IDs, unchanged marker-like IDs, null results, nested empty containers, invalid envelopes without handler execution, and notification batches acknowledged by HTTP 204 and executed exactly once.
+- ESP32 tests use the default task stack after the response-buffer fix. The ESP8266 test fixture uses heap-backed local documents; the previously failing Safe Mode client run was repeated with a 40-second crash-free capture.
+- No reference-PC endpoint, long-duration soak, or other board variant was tested in this run. The historical reference results below are separate.
+
+## Historical Reference Test Setup
 
 Captured ESP32 validation:
 - Date: 2026-06-11.
@@ -368,6 +380,6 @@ Expected:
 Before claiming broader Safe Mode interoperability than the evidence above:
 - Rerun the full ESP32 matrix when preparing a new release artifact and save serial/LAN logs with the result summary.
 - Rerun ESP8266 HTTP client checks against the `rpc-express-toolkit` reference endpoint if claiming ESP8266 reference interoperability.
-- Capture ESP8266 HTTP server runtime evidence if claiming ESP8266 server runtime coverage.
+- Rerun the board-to-board regression suite when changing ESP8266 server behavior; both server roles were covered in the 2026-10-12 run above.
 - Capture firmware commit, `rpc-express-toolkit` version/commit, board model, Arduino core/platform version, and pass/fail summary.
 - Confirm marker-like literal strings pass both Arduino-client-to-Node and Node-client-to-Arduino echo tests.

@@ -60,6 +60,23 @@ private:
         return false;
     }
 
+    static bool isNotificationBatch(const String& batch) {
+#if defined(ESP8266)
+        DynamicJsonDocument doc(RPC_JSON_DOC_SIZE);
+#else
+        StaticJsonDocument<RPC_JSON_DOC_SIZE> doc;
+#endif
+        if (deserializeJson(doc, batch) || !doc.is<JsonArray>() || doc.size() == 0) {
+            return false;
+        }
+        for (JsonVariantConst item : doc.as<JsonArrayConst>()) {
+            if (!RpcRequest::isValidEnvelope(item) || item.containsKey("id")) {
+                return false;
+            }
+        }
+        return true;
+    }
+
 #if RPC_ENABLE_SAFE_MODE
     static String encodeParamsForRequest(const String& params) {
         if (params.isEmpty()) {
@@ -253,6 +270,19 @@ public:
             RpcBatchResponse resp;
             resp.setError(RPC_ERROR_SERVER, "Failed to send batch request");
             return resp;
+        }
+
+        if (transport.hasNoContentResponse() || !transport.isHttp()) {
+            if (isNotificationBatch(wireBatch)) {
+                RpcBatchResponse resp;
+                resp.setNoResponse();
+                return resp;
+            }
+            if (transport.hasNoContentResponse()) {
+                RpcBatchResponse resp;
+                resp.setError(RPC_ERROR_SERVER, "Missing batch response");
+                return resp;
+            }
         }
 
         unsigned long start = millis();

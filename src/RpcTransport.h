@@ -54,6 +54,7 @@ public:
     virtual bool clientSafeEnabled() const { return false; }
     virtual bool hasRemoteSafeHeader() const { return false; }
     virtual bool remoteSafeEnabled() const { return false; }
+    virtual bool hasNoContentResponse() const { return false; }
     
 protected:
     unsigned long timeout = RPC_DEFAULT_TIMEOUT;
