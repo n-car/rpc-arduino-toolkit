@@ -455,7 +455,7 @@ board and the local library path.
 
 ### Run Tests
 
-`tests/ProtocolRegression/ProtocolRegression.ino` checks envelope validation,
+`tests/ProtocolRegression/ProtocolRegression.cpp` checks envelope validation,
 null IDs, mixed batches, and HTTP 204 using in-memory fake transports/sockets.
 Build and run the sketch with `RPC_ENABLE_SAFE_MODE=0` and `1`. It requires no
 network connection; there is currently no bundled native host test environment.

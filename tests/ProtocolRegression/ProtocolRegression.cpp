@@ -1,4 +1,4 @@
-// Self-contained regression sketch: fake sockets only, no WiFi or peripheral I/O.
+// Self-contained regression test: fake sockets only, no WiFi or peripheral I/O.
 // Build with RPC_ENABLE_SAFE_MODE=0 and 1 to cover both protocol modes.
 // Monitor serial at 115200; completion is RPC_PROTOCOL PASS or FAIL, followed
 // by periodic heartbeats. Checks remain active in release/NDEBUG builds.
